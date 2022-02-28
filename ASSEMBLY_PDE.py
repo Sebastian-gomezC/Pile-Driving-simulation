@@ -48,7 +48,7 @@ Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
 
 BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
 Physical Curve("disp",1) = {1,5,8,11,14};
-
+Physical Curve("level",2) = {4};
 Physical Curve("far",5) = {3,7,10,13,15,16};
 Physical Surface("soil1",1)={2};
 Physical Surface("soil2",2)={3};
@@ -209,7 +209,7 @@ K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((1E-7,0),(0,1E-7)))
 K=KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('0'),gam=gam,degree=1)
-bp=DirichletBC(W.sub(0),H,contorno,5)
+bp=DirichletBC(W.sub(0),H,contorno,2)
 gamma=Constant((0.1))#biotcoef
 r=0.15
 bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
@@ -245,7 +245,7 @@ for pot in range(steps):
     if pot != 0:
         p_n2, u_n2 = X.split(deepcopy=True)
     T=Expression(('0','x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 1000: x[1]>=-I+r ? 1000 :0)'),I=t,r=r ,degree=2)
-    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 0.5*x[1]+I: x[1]>=-I+r ? r :0)'),I=t,r=r ,degree=1)
+    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r :0)'),I=t,r=r ,degree=1)
     bc2 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
     bcs=[bc1,bc2,bp]
     # A=assemble(L)
