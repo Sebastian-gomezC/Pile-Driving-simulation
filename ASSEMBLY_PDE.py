@@ -14,6 +14,7 @@ Created on Tue Jun  1 14:26:23 2021
 @author: SebastianG
 """
 
+from ast import Constant
 import os
 
 from fenics import*
@@ -183,7 +184,7 @@ def h(p):
     return p/gam - x[1]
 
 
-alfa=1000 
+alfa=10000 
 #theta=s/(1-s)
 gam =Constant((9806.65))
 
@@ -207,30 +208,23 @@ K2=Constant(((6.3E-4,0),(0,6.3E-4)))
 K3=Constant(((8E-3,0),(0,8E-3)))
 K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((1E-7,0),(0,1E-7)))
-K=KM(subd,K1,K2,K3,K4,K5)
+K=Constant(((1E-7,0),(0,1E-7)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('0'),gam=gam,degree=1)
 bp=DirichletBC(W.sub(0),H,contorno,2)
-gamma=Constant((0.1))#biotcoef
+gamma=Constant((1))#biotcoef
 r=0.15
 bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
+flo=Constant((0))
+s_coef=1.3*0.5E-9-(gamma-1.3)*0.3
 
-s_coef=5
-
-# L_momentum =inner(sigma(u), epsilon(v))*dx\
-#     + gamma*p*nabla_div(v)*dx- nabla_div(p*v)*dx
-# R_momentum =inner(f, v)*dx\
-#             + inner(T, v)*ds(subdomain_id=4, domain=mesh, subdomain_data=contorno)                   
-# L_mass = -dt*inner(nabla_grad(q),K*nabla_grad(p))*dx\
-#     + gamma*(nabla_div(u))*q*dx
-# R_mass =  gamma*(nabla_div(u_n))*q*dx
 
 F1 = inner(sigma(u), epsilon(v))*dx \
     - inner(f, v)*dx -\
     inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)\
-    + gamma*p*nabla_div(v)*dx 
+    - gamma*p*nabla_div(v)*dx 
     
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx +(p-p_n)*q*dx
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx+s_coef*(p-p_n)*q*dx - flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
 
 
 L_momentum =lhs(F1)
@@ -244,24 +238,24 @@ R= R_mass +R_momentum
 for pot in range(steps):
     if pot != 0:
         p_n2, u_n2 = X.split(deepcopy=True)
-    T=Expression(('0','x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 1000: x[1]>=-I+r ? 1000 :0)'),I=t,r=r ,degree=2)
+    #T=Expression(('0','x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 1000: x[1]>=-I+r ? 1000 :0)'),I=t,r=r ,degree=2)
     Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r :0)'),I=t,r=r ,degree=1)
     bc2 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
     bcs=[bc1,bc2,bp]
-    # A=assemble(L)
-    # b=assemble(R)
-    # [bc.apply(A) for bc in bcs]
-    # [bc.apply(b) for bc in bcs]
+    A=assemble(L)
+    b=assemble(R)
+    [bc.apply(A) for bc in bcs]
+    [bc.apply(b) for bc in bcs]
     X = Function(W)
-    # solve(A, X.vector(), b,'lu')
-    solve(L==R,X,bcs)
+    solve(A, X.vector(), b,'lu')
+    #solve(L==R,X,bcs)
 
     p_n, u_n = X.split(deepcopy=True)
     u_=as_vector((X[1],X[0]))
     u_=project(u_,Z_v)
     p_=project(X[2],Z)
     
-    if pot % 10== 0:
+    if pot % 100== 0:
         
         s = sigma(u_)
         
