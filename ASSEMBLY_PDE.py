@@ -63,7 +63,28 @@ Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
 """
+test_geo="""
 
+SetFactory("OpenCASCADE");
+ancho = 30 ;
+prof =-10;
+soil1 = -4.7;
+soil2= -2.7;
+soil3= -11.1;
+soil4= -7.7;
+soil5= -23.8;
+Rectangle(1) = {0, 0, 0, ancho, prof, 0};
+Physical Curve("disp",1) = {4};
+Physical Curve("level",2) = {1};
+Physical Curve("far",5) = {3,2};
+Physical Surface("soil1",1)={1};
+Characteristic Length {2,3} = 1;
+Characteristic Length {1,4} = 0.08;
+Mesh 2 ;
+
+Mesh.MshFileVersion = 2.2;
+Save StrCat(StrPrefix(General.FileName), ".msh");
+"""
 nombre = 'pile_install'
 
 if os.path.exists("%s.mesh"%(nombre)):
@@ -71,7 +92,7 @@ if os.path.exists("%s.mesh"%(nombre)):
 else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
-    filed.write(geo_file_content)
+    filed.write(test_geo)
 os.system('gmsh -2 {}.mesh/{}.geo -format msh2'.format(nombre,nombre))
 os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
 print('malla terminada')
@@ -158,15 +179,15 @@ p_n2,u_n2=split(X_n2)
 steps =1000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=20 #tiempo total
+Ti=1 #tiempo total
 delta= (Ti-t)/steps
 dt=Constant((delta))
 e=2717000 #modulo elasticidad de prueba 
 
-E=K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
-theta =K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
-C=K(subd,15530,10350,18650,18400,14000) #cohesion
-nu=Constant(0.2)#coeficiente de poisson  
+E=e#K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
+theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
+C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
+nu=Constant(0.35)#coeficiente de poisson  
 mu = E/2/(1+nu)#coeficientes de Lame
 rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
@@ -210,12 +231,12 @@ K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((1E-7,0),(0,1E-7)))
 K=Constant(((1E-7,0),(0,1E-7)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('0'),gam=gam,degree=1)
-bp=DirichletBC(W.sub(0),H,contorno,2)
-gamma=Constant((1))#biotcoef
+bp=DirichletBC(W.sub(0),Constant((0)),contorno,2)
+gamma=Constant((0.085))#biotcoef
 r=0.15
 bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
 flo=Constant((0))
-s_coef=1.3*0.5E-9-(gamma-1.3)*0.3
+s_coef=1.3*0.5E-9-(gamma-1.3)*0.4
 
 
 F1 = inner(sigma(u), epsilon(v))*dx \
@@ -223,8 +244,8 @@ F1 = inner(sigma(u), epsilon(v))*dx \
     inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)\
     - gamma*p*nabla_div(v)*dx 
     
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx+s_coef*(p-p_n)*q*dx - flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
+F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx + s_coef*(p-p_n)*q*dx - flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
 
 
 L_momentum =lhs(F1)
@@ -239,23 +260,23 @@ for pot in range(steps):
     if pot != 0:
         p_n2, u_n2 = X.split(deepcopy=True)
     #T=Expression(('0','x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 1000: x[1]>=-I+r ? 1000 :0)'),I=t,r=r ,degree=2)
-    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r :0)'),I=t,r=r ,degree=1)
+    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
     bc2 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
     bcs=[bc1,bc2,bp]
-    A=assemble(L)
-    b=assemble(R)
-    [bc.apply(A) for bc in bcs]
-    [bc.apply(b) for bc in bcs]
+    #A=assemble(L)
+    #b=assemble(R)
+    #[bc.apply(A) for bc in bcs]
+    #[bc.apply(b) for bc in bcs]
     X = Function(W)
-    solve(A, X.vector(), b,'lu')
-    #solve(L==R,X,bcs)
+    #solve(A, X.vector(), b,'lu')
+    solve(L==R,X,bcs)
 
     p_n, u_n = X.split(deepcopy=True)
     u_=as_vector((X[1],X[0]))
     u_=project(u_,Z_v)
     p_=project(X[2],Z)
     
-    if pot % 100== 0:
+    if pot % 1== 0:
         
         s = sigma(u_)
         
