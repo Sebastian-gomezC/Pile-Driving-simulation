@@ -38,7 +38,7 @@ bc0 = DirichletBC(V,Constant(0), u0_boundary)
 steps =1000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=1 #tiempo total
+Ti=100 #tiempo total
 delta= (Ti-t)/steps
 dt=Constant((delta))
 
@@ -47,21 +47,21 @@ E= Constant(10**11)
 A= Constant(10**(-4))
 L= Constant(1)
 f = Constant(0)
-F = dt*dt*inner(grad(u), grad(v))*10*dx + dt*5*inner(grad((u-u_n)),grad(v))*dx + 6*inner(grad((u-2*u_n+u_n2)),grad(v))*dx - v*f*fk*dx
+u_n = interpolate(u0,V)
+u_n2 =interpolate(u0,V)
+F = dt*dt*inner(grad(u), grad(v))*10*dx + dt*1*(u-u_n)*v*dx + 100*(u-2*u_n+u_n2)*v*dx - v*f*fk*dx
 I=lhs(F)
 D=rhs(F)
+
+u = Function(V)
 for i in range(steps):
-    if i==0:
-        u_n = interpolate(u0,V)
-        u_n2 =interpolate(u0,V)
-        u = Function(V)
-    else:
-        u = Function(V)
     solve(I==D,u,bc0)
     u_n2.assign(u_n)
     u_n.assign(u)
-    print(type(u))
-    plot(u)
-    plt.savefig('plots/step{}.png'.format(i))
-    plt.clf()
+    print(i)
+    if i%5 ==0:
+        plot(u)
+        plt.ylim([-1, 1])
+        plt.savefig('plots/step{}.png'.format(i))
+        plt.clf()
 
