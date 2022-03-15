@@ -66,7 +66,7 @@ Save StrCat(StrPrefix(General.FileName), ".msh");
 test_geo="""
 SetFactory("OpenCASCADE");
 ancho = 0.2 ;
-prof =-0.1;
+prof =-0.5;
 
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
 Physical Curve("disp",1) = {4,2};
@@ -75,6 +75,7 @@ Physical Curve("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
+RefineMesh;
 RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
@@ -172,7 +173,7 @@ p_n, u_n = split(X_n)
 steps =500
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=100 #tiempo total
+Ti=10000 #tiempo total
 delta= (Ti-t)/steps
 dt=Constant((delta))
 e=2717000 #modulo elasticidad de prueba 
@@ -189,7 +190,7 @@ d = u.geometric_dimension()
 f = Constant((0, 0))
 lam=Constant((0))
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-1000))
+T=Constant((0,-10000000))
 
 def h(p):
     x=SpatialCoordinate(mesh)
@@ -224,15 +225,15 @@ K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((1E-7,0),(0,1E-7)))
 K=Constant(((1E-7,0),(0,1E-7)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('0'),gam=gam,degree=1)
-#p_n=interpolate(H,Z)
-bp=DirichletBC(W.sub(0),Constant((1000)),contorno,2)
-gamma=Constant((0.85))#biotcoef
+
+bp=DirichletBC(W.sub(0),Constant((10000000)),contorno,2)
+gamma=Constant((0.9))#biotcoef
 r=0.45
 bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
 bc2 = DirichletBC(W.sub(1).sub(0), Constant((0)),contorno,1)
 flo=Constant((0))
 s_coef=1.3*0.5E-9-(gamma-1.3)*0.4
-u_n =interpolate(Constant((0,0)),Z_v)
+
 
 F1 = inner(sigma(u), epsilon(v))*dx \
     - inner(f, v)*dx -\
@@ -240,8 +241,9 @@ F1 = inner(sigma(u), epsilon(v))*dx \
     - gamma*p*nabla_div(v)*dx 
     
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx + s_coef*(p-p_n)*q*dx - dt*flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
-
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx + s_coef*(p-p_n)*q*dx - \
+        -dt*flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) \
+            -dt*flo*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)
 
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
@@ -251,8 +253,10 @@ R_mass=rhs(F2)
 L= L_mass+L_momentum
 R= R_mass +R_momentum
 X = Function(W)
-for pot in range(steps):
 
+
+p_n=interpolate(H,Z)
+for pot in range(steps):
     bcs=[bc1,bc2,bp]
     #A=assemble(L)
     #b=assemble(R)
@@ -261,12 +265,12 @@ for pot in range(steps):
 
     #solve(A, X.vector(), b,'lu')
     solve(L==R,X,bcs)
-
-    p_n, u_n = X.split(deepcopy=True)
+    X_n.assign(X)
+    p_n, u_n = split(X_n)
     u_=as_vector((X[1],X[2]))
     u_=project(u_,Z_v)
     p_=project(X[0],Z)
-    T=Constant((0,0))
+
     if pot % 10== 0:
         
         s = sigma(u_)
