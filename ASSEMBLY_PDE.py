@@ -65,8 +65,8 @@ Save StrCat(StrPrefix(General.FileName), ".msh");
 """
 test_geo="""
 SetFactory("OpenCASCADE");
-ancho = 0.2 ;
-prof =-0.5;
+ancho = 0.02 ;
+prof =-0.01;
 
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
 Physical Curve("disp",1) = {4,2};
@@ -75,7 +75,6 @@ Physical Curve("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
-RefineMesh;
 RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
@@ -170,10 +169,10 @@ q, v = split(V)
 p_n, u_n = split(X_n)
 
 
-steps =500
+steps =5000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=10000 #tiempo total
+Ti=1#tiempo total
 delta= (Ti-t)/steps
 dt=Constant((delta))
 e=2717000 #modulo elasticidad de prueba 
@@ -190,7 +189,7 @@ d = u.geometric_dimension()
 f = Constant((0, 0))
 lam=Constant((0))
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-10000000))
+T=Constant((0,0))
 
 def h(p):
     x=SpatialCoordinate(mesh)
@@ -223,27 +222,31 @@ K2=Constant(((6.3E-4,0),(0,6.3E-4)))
 K3=Constant(((8E-3,0),(0,8E-3)))
 K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((1E-7,0),(0,1E-7)))
-K=Constant(((1E-7,0),(0,1E-7)))#KM(subd,K1,K2,K3,K4,K5)
-H=Expression(('0'),gam=gam,degree=1)
+K=Constant(((1,0),(0,1)))#KM(subd,K1,K2,K3,K4,K5)
+H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
-bp=DirichletBC(W.sub(0),Constant((10000000)),contorno,2)
-gamma=Constant((0.9))#biotcoef
+bp=DirichletBC(W.sub(0),Constant((0)),contorno,2)
+bp1=DirichletBC(W.sub(0),Constant((0)),contorno,5)
+bp2=DirichletBC(W.sub(0),Constant((0)),contorno,1)
+gamma=Constant((1))#biotcoef
 r=0.45
-bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
-bc2 = DirichletBC(W.sub(1).sub(0), Constant((0)),contorno,1)
+bc1 = DirichletBC(W.sub(1).sub(0), Constant((0)),contorno,1)
+bc2 = DirichletBC(W.sub(1), Constant((0,0)),contorno,5)
 flo=Constant((0))
-s_coef=1.3*0.5E-9-(gamma-1.3)*0.4
-
+s_coef=1.2*0.5E-9-(gamma-1.2)*0.4
+X_n=Expression(('-4000000*(x[1]+0.005)*(x[1]+0.005)+100','0','0'), gam=gam,degree=3)
+X_n=interpolate(X_n, W)
+p_n, u_n = split(X_n)
 
 F1 = inner(sigma(u), epsilon(v))*dx \
     - inner(f, v)*dx -\
     inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
     - gamma*p*nabla_div(v)*dx 
     
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx + s_coef*(p-p_n)*q*dx - \
-        -dt*flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) \
-            -dt*flo*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)
+F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx -s_coef*(p-p_n)*q*dx\
+        #-dt*flo*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) \
+
 
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
@@ -257,22 +260,13 @@ X = Function(W)
 
 p_n=interpolate(H,Z)
 for pot in range(steps):
-    bcs=[bc1,bc2,bp]
-    #A=assemble(L)
-    #b=assemble(R)
-    #[bc.apply(A) for bc in bcs]
-    #[bc.apply(b) for bc in bcs]
-
-    #solve(A, X.vector(), b,'lu')
-    solve(L==R,X,bcs)
-    X_n.assign(X)
+    bcs=[bp,bp1,bc2]
     p_n, u_n = split(X_n)
-    u_=as_vector((X[1],X[2]))
-    u_=project(u_,Z_v)
-    p_=project(X[0],Z)
+    u_=project(u_n,Z_v)
+    p_=project(p_n,Z)
 
     if pot % 10== 0:
-        
+
         s = sigma(u_)
         
         cauchy=project(s,TS)
@@ -288,9 +282,15 @@ for pot in range(steps):
         fs.rename(" Mohr-Coulomb Fs", "Mohr-Coulomb Fs") ;vtkfile_fs << fs
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-        colum=h(p_)
-        colum=project(colum, Z)
-        colum.rename("pressure_head", "pressure"); vtkfile_h << colum     
+    #A=assemble(L)
+    #b=assemble(R)
+    #[bc.apply(A) for bc in bcs]
+    #[bc.apply(b) for bc in bcs]
+
+    #solve(A, X.vector(), b,'lu')
+    solve(L==R,X,bcs)
+    X_n.assign(X)
+
     print('u max:', u_.vector().get_local().max(),
               'step', pot, 'of', steps,'time:',t)
     print('p max:', p_.vector().get_local().max())
