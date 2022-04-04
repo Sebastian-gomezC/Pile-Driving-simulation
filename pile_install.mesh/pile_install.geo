@@ -10,6 +10,6 @@ Physical Curve("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
-
+RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");

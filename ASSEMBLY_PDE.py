@@ -75,7 +75,7 @@ Physical Curve("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
-
+RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
 """
@@ -169,11 +169,11 @@ q, v = split(V)
 
 
 
-steps =500000
+steps =50000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
 Ti=1#tiempo total
-delta= 3.04E-6
+delta= 3.04E-3
 dt=Constant((delta))
 e=1#modulo elasticidad de prueba 
 
@@ -230,23 +230,22 @@ gamma=Constant((1))#biotcoef
 r=0.45
 
 bc2 = DirichletBC(W.sub(1), Constant((0,0)),contorno,5)
-flo=Constant((0))
+flo=Constant((0,0))
 s_coef=0.5
 #X_n=Expression(('0','0','0'), gam=gam,degree=3)
 #X_n=interpolate(X_n, W)
 X_n = Function(W)
 p_n, u_n = split(X_n)
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Expression(('0','0'),t=t,degree=2)
+T=Expression(('0','-1'),t=t,degree=2)
 
-F1 = dt*inner(sigma(u), epsilon(v))*dx \
-    - dt*inner(f, v)*dx +\
-    dt*inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
-    - dt*gamma*p*nabla_div(v)*dx - inner((u-u_n),v)*dx
+F1 = dt*inner(sigma(u), epsilon(v))*dx - dt*gamma*p*nabla_div(v)*dx\
+    - dt*inner(f, v)*dx - dt*inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
+     + 3000*inner((u-u_n),v)*dx
     
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx  \
-        -dt*flo*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*flo*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) 
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx -0.0001*(p-p_n)*q*dx\
+        -dt*inner(flo,n)*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,n)*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) 
 
 
 L_momentum =lhs(F1)
@@ -259,16 +258,8 @@ R= R_mass +R_momentum
 X = Function(W)
 
 for pot in range(steps):
-    if t <= 1:
-        desp=Expression(('-0.01*t'),t=t, degree=1)
-        bc1 = DirichletBC(W.sub(1).sub(1),desp,contorno,2)
-        bcs=[bp2,bc2,bc1]
-    else:
-        bcs=[bp2,bc2]
-    
-    
 
-
+    bcs=[bp2,bc2]
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
@@ -280,7 +271,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 500== 0:
+    if pot % 50== 0:
         
         s = sigma(u_)
         
