@@ -75,8 +75,7 @@ Physical Curve("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
-RefineMesh;
-RefineMesh;
+
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
 """
@@ -154,8 +153,8 @@ def epsilon(u):
 #esfuerzo 
 def sigma(u):
     return lmbda*div(u)*Identity(d) + 2*mu*epsilon(u)
-ele_p  = FiniteElement("CG",  mesh.ufl_cell(), 1) # pressure
-ele_u  = VectorElement("CG",  mesh.ufl_cell(), 2) # solid displacement
+ele_p  = FiniteElement("P",  mesh.ufl_cell(), 1) # pressure
+ele_u  = VectorElement("P",  mesh.ufl_cell(), 2) # solid displacement
 W = MixedElement([ele_p, ele_u])
 W = FunctionSpace(mesh, W)
 U = TrialFunction(W)
@@ -170,11 +169,11 @@ q, v = split(V)
 
 
 
-steps =5000
+steps =500000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
 Ti=1#tiempo total
-delta= 2.04E-6
+delta= 3.04E-6
 dt=Constant((delta))
 e=1#modulo elasticidad de prueba 
 
@@ -229,7 +228,7 @@ H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 bp2=DirichletBC(W.sub(0),Constant((0)),contorno,1)
 gamma=Constant((1))#biotcoef
 r=0.45
-bc1 = DirichletBC(W.sub(1).sub(0),Constant((0)),contorno,2)
+
 bc2 = DirichletBC(W.sub(1), Constant((0,0)),contorno,5)
 flo=Constant((0))
 s_coef=0.5
@@ -237,16 +236,16 @@ s_coef=0.5
 #X_n=interpolate(X_n, W)
 X_n = Function(W)
 p_n, u_n = split(X_n)
+ds = Measure('ds', domain=mesh, subdomain_data=contorno)
+T=Expression(('0','0'),t=t,degree=2)
 
-T=Expression(('0','0.1'),t=t,degree=2)
-
-F1 = inner(sigma(u), epsilon(v))*dx \
-    - inner(f, v)*dx +\
-    inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
-    - gamma*p*nabla_div(v)*dx 
+F1 = dt*inner(sigma(u), epsilon(v))*dx \
+    - dt*inner(f, v)*dx +\
+    dt*inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
+    - dt*gamma*p*nabla_div(v)*dx - inner((u-u_n),v)*dx
     
-F2 = +dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx -(p-p_n)*q*dx \
+F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx  \
         -dt*flo*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*flo*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) 
 
 
@@ -260,7 +259,13 @@ R= R_mass +R_momentum
 X = Function(W)
 
 for pot in range(steps):
-    bcs=[bp2,bc2,bc1]
+    if t <= 1:
+        desp=Expression(('-0.01*t'),t=t, degree=1)
+        bc1 = DirichletBC(W.sub(1).sub(1),desp,contorno,2)
+        bcs=[bp2,bc2,bc1]
+    else:
+        bcs=[bp2,bc2]
+    
     
 
 
@@ -275,7 +280,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 10== 0:
+    if pot % 500== 0:
         
         s = sigma(u_)
         
