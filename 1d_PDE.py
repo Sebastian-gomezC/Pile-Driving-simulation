@@ -66,11 +66,17 @@ t=0 # tiempo inicial
 Ti=10 #tiempo total
 delta= (Ti-t)/steps
 dt=Constant((delta))
-K=1
+B_s= 1E-11
+B_m=1E-10
+B_f=4.4E-10
+gamma=1-B_s/B_m #biotcoef
+r=0.45
+Poro=0.05
+k=1E-18/8.9E-4
+s_coef=(gamma-Poro)*B_s +Poro*B_f
 fk= Constant(10**11)
 E= Constant(10**11)
-A= Constant(10**(-4))
-L= Constant(1)
+
 f = Constant(0)
 #u0=Expression(('0','-x[0]*x[0]'),degree=2)
 #U_n = interpolate(u0,W)
@@ -79,11 +85,11 @@ p_n, u_n = split(U_n)
 U_n2= Function(W)
 #U_n2 =interpolate(u0,W)
 p_n2, u_n2 = split(U_n2)
-T=Constant((1))
+T=Constant((-5E9))
 Q= Constant((0))
 #ds = ds(subdomain_data= exterior_facet_domains)
-F = 1*dt*inner(grad(u), grad(v))*dx- dt*p.dx(0)*v*dx + (u-u_n)*v*dx + (u-2*u_n+u_n2)*v*dx- dt*v*f*fk*dx - dt*T*v*ds
-F2= 1*dt*inner(grad(q), grad(p))*dx -(u.dx(0)-u_n.dx(0))*q*dx -q*Q*ds
+F = dt*inner(grad(3E6*u), grad(v))*dx- gamma*dt*p.dx(0)*v*dx + (u-u_n)*v*dx - dt*T*v*ds
+F2= dt*k*inner(grad(q), grad(p))*dx + gamma*(u.dx(0)-u_n.dx(0))*q*dx -q*Q*ds
 I1=lhs(F)
 D1=rhs(F)
 I2=lhs(F2)
@@ -104,7 +110,7 @@ for i in range(steps):
     if i%2 ==0:
         plot(abs(U.sub(0)))
         plot(U.sub(1))
-        plt.ylim([-2, 10])
+        #plt.ylim([-2, 10])
         plt.savefig('plots/step{}.png'.format(i+1))
         plt.clf()
         u_=project(u_n,V)

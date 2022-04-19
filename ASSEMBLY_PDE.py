@@ -65,16 +65,18 @@ Save StrCat(StrPrefix(General.FileName), ".msh");
 """
 test_geo="""
 SetFactory("OpenCASCADE");
-ancho = 4;
-prof =-1;
+ancho = 0.5;
+prof =-0.22;
 
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-Physical Curve("disp",1) = {4,2};
-Physical Curve("level",2) = {1};
-Physical Curve("far",5) = {3};
+Physical Line("disp",1) = {4,2};
+Physical Line("level",2) = {1};
+Physical Line("far",5) = {3};
 Physical Surface("soil1",1)={1};
 
 Mesh 2 ;
+RefineMesh;
+RefineMesh;
 RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
@@ -169,13 +171,13 @@ q, v = split(V)
 
 
 
-steps =50000
+steps =100
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
 Ti=1#tiempo total
-delta= 3.04E-3
+delta= Ti/steps
 dt=Constant((delta))
-e=1#modulo elasticidad de prueba 
+e=310000#modulo elasticidad de prueba 
 
 E=e#K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
@@ -225,26 +227,33 @@ K5=Constant(((1E-7,0),(0,1E-7)))
 K=Constant(((1,0),(0,1)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
-bp2=DirichletBC(W.sub(0),Constant((0)),contorno,1)
-gamma=Constant((1))#biotcoef
+bp1=DirichletBC(W.sub(0),Constant((0)),contorno,1)
+bp2=DirichletBC(W.sub(0),Constant((0)),contorno,5)
+B_s=1E-11
+B_m=1E-10
+B_f=4.4E-10
+gamma=1#-B_s/B_m #biotcoef
 r=0.45
-
+Poro=0.05
+s_coef=(gamma-Poro)*B_s +Poro*B_f
+#bc1 = DirichletBC(W.sub(1).sub(0), Constant((0)),contorno,1)
+bc1 = DirichletBC(W.sub(1), Constant((0,-0.07)),contorno,2)
 bc2 = DirichletBC(W.sub(1), Constant((0,0)),contorno,5)
 flo=Constant((0,0))
-s_coef=0.5
+
 #X_n=Expression(('0','0','0'), gam=gam,degree=3)
 #X_n=interpolate(X_n, W)
 X_n = Function(W)
 p_n, u_n = split(X_n)
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Expression(('0','-1'),t=t,degree=2)
+T=Constant((0,0))
 
 F1 = dt*inner(sigma(u), epsilon(v))*dx - dt*gamma*p*nabla_div(v)*dx\
-    - dt*inner(f, v)*dx - dt*inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
-     + 3000*inner((u-u_n),v)*dx
-    
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx -0.0001*(p-p_n)*q*dx\
+    - dt*inner(f, v)*dx \
+     + 2E6*inner((u-u_n),v)*dx
+    #- inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
+F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
+    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx +s_coef*(p-p_n)*q*dx\
         -dt*inner(flo,n)*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,n)*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) 
 
 
@@ -258,8 +267,13 @@ R= R_mass +R_momentum
 X = Function(W)
 
 for pot in range(steps):
-
-    bcs=[bp2,bc2]
+    if t<(Ti/2):
+        bc1 = DirichletBC(W.sub(1), Constant((0,-0.07*(2*t/Ti)**2)),contorno,2)
+        bcs=[bc1,bc2,bp1]
+    else:
+        #bc1 = DirichletBC(W.sub(1), Constant((0,-0.07)),contorno,2)
+        bcs=[bc2,bp1]
+    
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
@@ -271,7 +285,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 50== 0:
+    if pot % 1== 0:
         
         s = sigma(u_)
         
@@ -291,7 +305,7 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-    print('u max:', u_.vector().get_local().max(),
+    print('u max:', np.linalg.norm(u_.vector().get_local()).max(),
               'step', pot, 'of', steps,'time:',t)
     print('p max:', p_.vector().get_local().max())
     print('p min:', p_.vector().get_local().min())
