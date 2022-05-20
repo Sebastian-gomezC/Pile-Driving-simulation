@@ -26,67 +26,31 @@ from ufl.tensors import as_matrix
 
 print('creando malla..')
 
-geo_file_content= """SetFactory("OpenCASCADE");
-ancho = 10 ;
-prof =-50;
-soil1 = -4.7;
-soil2= -2.7;
-soil3= -11.1;
-soil4= -7.7;
-soil5= -23.8;
+test_geo="""
+SetFactory("OpenCASCADE");
+
+ancho = 0.05;
+prof =-0.1;
+
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-
-
-Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
-
-Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
-
-Rectangle(4) = {0, soil1+soil2, 0, ancho, soil3, 0};
-
-Rectangle(5) = {0, soil1+soil2+soil3, 0, ancho, soil4, 0};
-
-Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
-
-BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
-Physical Curve("disp",1) = {1,5,8,11,14};
-
-Physical Curve("far",5) = {3,7,10,13,16};
-Physical Curve("under",3) = {15};
-Physical Curve("level",2) = {4};
-Physical Surface("soil1",1)={2};
-Physical Surface("soil2",2)={3};
-Physical Surface("soil3",3)={4};
-Physical Surface("soil4",4)={5};
-Physical Surface("soil5",5)={6};
-
-
-Transfinite Curve { 2, 6, 9, 12, 15} = 25 Using Progression 0.85;
-Transfinite Curve { 4} = 25 Using Progression 1/0.85;
-//+
-Transfinite Curve {1, 5, 8, 11, 14, 16, 13, 10, 7, 3} = 50 Using Progression 1;
-//+
-Transfinite Surface {2};
-//+
-Transfinite Surface {3};
-//+
-Transfinite Surface {4};
-//+
-Transfinite Surface {5};
-//+
-Transfinite Surface {6};
+Physical Line("disp",1) = {4,2};
+Physical Line("level",2) = {1};
+Physical Line("far",5) = {3};
+Physical Surface("soil1",1)={1};
+Transfinite Curve{1,2,3,4} = 31 ;
+Transfinite Surface{1};
 Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
-
 """
-nombre = 'pile_install'
+nombre = 'Terzagui'
 
 if os.path.exists("%s.mesh"%(nombre)):
         a=os.path.exists("%s.mesh"%(nombre))
 else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
-    filed.write(geo_file_content)
+    filed.write(test_geo)
 os.system('gmsh -2 {}.mesh/{}.geo -format msh2'.format(nombre,nombre))
 os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
 print('malla terminada')
@@ -123,8 +87,6 @@ class K(UserExpression):
             values[0] = self.k_3
         else:
             values[0]=self.k_4
-    def value_shape(self):
-        return ()
 
 class KM(UserExpression):
     def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
@@ -147,8 +109,6 @@ class KM(UserExpression):
             values = self.k_3
         else:
             values =self.k_4
-    def value_shape(self):
-        return ()
 
 #deformacion
 def epsilon(u):
@@ -173,30 +133,31 @@ q, v = split(V)
 
 
 
-steps =1000
+steps =100
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=20#tiempo total
+Ti=1#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
-#B_s=1E-11
+# B_s=1E-11
+# B_m=1E-10
 B_f=2.2E-9
 
-r=0.3
-Poro=0.05
-
+r=0.45
+Poro=0.5
+nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-E=K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
-theta =K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
-C=K(subd,15530,10350,18650,18400,14000) #cohesion
-nu=Constant(0.3)#coeficiente de poisson  
-#B_m=1E-12
-#E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
-
+E=1729000#K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
-gamma=(1-B_s/B_m) #biotcoef
+gamma=Constant((1-B_s/B_m)) #biotcoef
 s_coef=(gamma-Poro)*B_s +Poro*B_f
+theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
+C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
+
+#E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad de prueba 
+
+print('modulo elasticidad ',B_m)
 mu = E/2/(1+nu)#coeficientes de Lame
 rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
@@ -236,38 +197,38 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
       
-K1=Constant(((7E-10,0),(0,7E-10)))
-K2=Constant(((6.3E-9,0),(0,6.3E-9)))
-K3=Constant(((8E-8,0),(0,8E-8)))
+K1=Constant(((7E-4,0),(0,7E-4)))
+K2=Constant(((6.3E-4,0),(0,6.3E-4)))
+K3=Constant(((8E-3,0),(0,8E-3)))
 K4=Constant(((1E-6,0),(0,1E-6)))
 K5=Constant(((8E-7,0),(0,8E-7)))
-K=KM(subd,K1,K2,K3,K4,K5)
+K=Constant(((1.12E-8,0),(0,1.12E-8)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
 
-bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,5)
-bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
+bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,1)
+bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,5)
 
 
 
-X_n=Expression(('-gam*x[1]','0','0'), gam=gam,degree=3)
-X_n=interpolate(X_n, W)
-#X_n = Function(W)
+#X_n=Expression(('0','0','0'), gam=gam,degree=3)
+#X_n=interpolate(X_n, W)
+X_n = Function(W)
 p_n, u_n = split(X_n)
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 T=Constant((0,0))
-print('PDE formulation')
+
 F1 = inner(sigma(u), epsilon(v))*dx - gamma*p*nabla_div(v)*dx\
     - inner(f, v)*dx \
-    #- inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
+    - inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
      #+ 100*inner((sigma(u)-sigma(u_n)),epsilon(v))*dx
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
     gamma*(nabla_div(u)-nabla_div(u_n))*q*dx +s_coef*(p-p_n)*q*dx\
-        -dt*inner(flo,n)*q*ds(subdomain_id=3,domain=mesh, subdomain_data=contorno) -dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+        -dt*inner(flo,n)*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
 
-print('L and R form ')
+
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -276,31 +237,28 @@ R_mass=rhs(F2)
 L= L_mass+L_momentum
 R= R_mass +R_momentum
 X = Function(W)
-
+#bcs=[bc1,bc2,bp1]
 for pot in range(steps):
-    if t<18:
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
-        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        bcs=[bc1,bc2,bc3,bp1]
+    if t> (0.5):
+          bc3 = DirichletBC(W.sub(1).sub(1), Constant((-0.5*0.02)),contorno,2)
+          bcs=[bc1,bc2,bc3,bp1]
     else:
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=10,r=r ,degree=1)
-        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        bc3 = DirichletBC(W.sub(1).sub(1), Constant((-t*0.02)),contorno,2)
         bcs=[bc1,bc2,bc3,bp1]
     
-    print('assemble')
+    
     A=assemble(L)
     b=assemble(R)
     [bc.apply(A) for bc in bcs]
     [bc.apply(b) for bc in bcs]
-    print('solver')
-    solve(A, X.vector(), b)
-    print('solver end')
+
+    solve(A, X.vector(), b,'lu')
     X_n.assign(X)
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
     if pot % 1== 0:
-        print('postproces')
+    
         s = sigma(u_)
         
         cauchy=project(s,TS)
@@ -311,8 +269,8 @@ for pot in range(steps):
         
         tm=(o1-o2)/2
         fail = envFalla(o1, o2,theta,C)
-        fs = fail/tm
-        fs=project(fs,Z)
+        #fs = fail/tm
+        fs=project(tm,Z)
         flow=-K*grad(p_)
         flow=project(flow,Z_v)
         fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
@@ -320,7 +278,7 @@ for pot in range(steps):
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
 
-    print('u max:',u_.vector().get_local().max(),
+    print('u max:',u_.vector().get_local().min(),
               'step', pot, 'of', steps,'time:',t)
     print('p max:', p_.vector().get_local().max())
     print('p min:', p_.vector().get_local().min())

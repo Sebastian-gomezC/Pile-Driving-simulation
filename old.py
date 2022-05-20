@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on Fri May  6 00:47:37 2022
+
+@author: sebastian
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
 Created on Fri Nov 26 21:03:08 2021
 
 @author: jsgomez
@@ -24,59 +32,21 @@ import numpy as np
 from ufl.tensors import as_matrix
 
 print('creando malla..')
-geo_test="""
+geo_file_content="""
 SetFactory("OpenCASCADE");
-ancho = 30 ;
-prof =-20;
+ancho = 0.5;
+prof =-0.22;
 
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-Physical Curve("disp",1) = {4};
+Physical Line("disp",1) = {4,2};
+Physical Line("level",2) = {1};
+Physical Line("far",5) = {3};
+Physical Surface("soil1",1)={1};
 
-Physical Curve("far",5) = {3,2};
-Physical Surface("soil1")={1};
-
-Characteristic Length {2,3} = 1;
-Characteristic Length {1,4} = 0.03;
 Mesh 2 ;
-
-Mesh.MshFileVersion = 2.2;
-Save StrCat(StrPrefix(General.FileName), ".msh");
-"""
-geo_file_content= """
-SetFactory("OpenCASCADE");
-ancho = 30 ;
-prof =-50;
-soil1 = -4.7;
-soil2= -2.7;
-soil3= -11.1;
-soil4= -7.7;
-soil5= -23.8;
-Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-
-
-Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
-
-Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
-
-Rectangle(4) = {0, soil1+soil2, 0, ancho, soil3, 0};
-
-Rectangle(5) = {0, soil1+soil2+soil3, 0, ancho, soil4, 0};
-
-Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
-
-BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
-Physical Curve("disp",1) = {1,5,8,11,14};
-
-Physical Curve("far",5) = {3,7,10,13,15,16};
-Physical Surface("soil1",1)={2};
-Physical Surface("soil2",2)={3};
-Physical Surface("soil3",3)={4};
-Physical Surface("soil4",4)={5};
-Physical Surface("soil5",5)={6};
-Characteristic Length {4,3,6,8,10,12} = 1;
-Characteristic Length {2,1,5,7,9,11} = 0.1;
-Mesh 2 ;
-
+RefineMesh;
+RefineMesh;
+RefineMesh;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
 """
@@ -105,18 +75,26 @@ vtkfile_h = File('%s.results1/pressure_head.pvd' % (nombre))
 
     
 class K(UserExpression):
-    def __init__(self, subdominio, k_0, k_1, **kwargs):
+    def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
         super().__init__(**kwargs)
         self.subdominio = subdominio
         self.k_0 = k_0
         self.k_1 = k_1
-
+        self.k_2 = k_2
+        self.k_3 = k_3
+        self.k_4 = k_4
 
     def eval_cell(self, values, x, cell):
         if self.subdominio[cell.index] == 1:
             values[0] = self.k_0
         elif self.subdominio[cell.index] == 2:
             values[0] = self.k_1
+        elif self.subdominio[cell.index] == 3:
+            values[0] = self.k_2
+        elif self.subdominio[cell.index] == 4:
+            values[0] = self.k_3
+        else:
+            values[0]=self.k_4
 
 
 
