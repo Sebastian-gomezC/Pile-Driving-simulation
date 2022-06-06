@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Nov 26 21:03:08 2021
-
 @author: jsgomez
 """
 
@@ -10,7 +9,6 @@ Created on Fri Nov 26 21:03:08 2021
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jun  1 14:26:23 2021
-
 @author: SebastianG
 """
 
@@ -28,10 +26,8 @@ print('creando malla..')
 
 test_geo="""
 SetFactory("OpenCASCADE");
-
 ancho = 0.05;
 prof =-0.1;
-
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
 Physical Line("disp",1) = {4,2};
 Physical Line("level",2) = {1};
