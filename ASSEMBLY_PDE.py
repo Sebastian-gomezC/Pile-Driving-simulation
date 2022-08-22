@@ -16,64 +16,68 @@ Created on Tue Jun  1 14:26:23 2021
 
 from ast import Constant
 import os
-
+import meshio
 from fenics import*
 from mshr import *
 from matplotlib import pyplot
 from ufl import nabla_div, nabla_grad, elem_op
 import numpy as np
+from dolfin import cpp
 from ufl.tensors import as_matrix
 
 print('creando malla..')
-
+def create_mesh(mesh, cell_type, prune_z=False):
+        cells = mesh.get_cells_type(cell_type)
+        cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
+        out_mesh = meshio.Mesh(points=mesh.points, cells={cell_type: cells}, cell_data={"name_to_read":[cell_data]})
+        if prune_z:
+            out_mesh.prune_z_0()
+        return out_mesh
 geo_file_content= """SetFactory("OpenCASCADE");
-ancho = 10 ;
-prof =-50;
+ancho = 30 ;
+prof =-10;
 soil1 = -4.7;
 soil2= -2.7;
 soil3= -11.1;
 soil4= -7.7;
 soil5= -23.8;
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
+//Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
 
+//Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
 
-Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
+//Rectangle(4) = {0, soil1+soil2, 0, ancho, soil3, 0};
 
-Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
+//Rectangle(5) = {0, soil1+soil2+soil3, 0, ancho, soil4, 0};
 
-Rectangle(4) = {0, soil1+soil2, 0, ancho, soil3, 0};
+//Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
 
-Rectangle(5) = {0, soil1+soil2+soil3, 0, ancho, soil4, 0};
+//BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
+Physical Line("disp",1) = {4};
 
-Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
-
-BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
-Physical Curve("disp",1) = {1,5,8,11,14};
-
-Physical Curve("far",5) = {3,7,10,13,16};
-Physical Curve("under",3) = {15};
-Physical Curve("level",2) = {4};
-Physical Surface("soil1",1)={2};
-Physical Surface("soil2",2)={3};
-Physical Surface("soil3",3)={4};
-Physical Surface("soil4",4)={5};
-Physical Surface("soil5",5)={6};
-
-
-Transfinite Curve { 2, 6, 9, 12, 15} = 25 Using Progression 0.85;
-Transfinite Curve { 4} = 25 Using Progression 1/0.85;
+Physical Line("far",5) = {2};
+Physical Line("under",3) = {3};
+Physical Line("level",2) = {1};
+Physical Surface("soil1",1)={1};
+//Physical Surface("soil2",2)={3};
+//Physical Surface("soil3",3)={4};
+//Physical Surface("soil4",4)={5};
+//Physical Surface("soil5",5)={6};
+Transfinite Line { 3} = 50 Using Progression 0.95;
+Transfinite Line { 1} = 50 Using Progression 1/0.95;
 //+
-Transfinite Curve {1, 5, 8, 11, 14, 16, 13, 10, 7, 3} = 70 Using Progression 1;
+Transfinite Line{2} =10 Using Progression 1;
+Transfinite Line{4} = 70 Using Progression 1;
 //+
-Transfinite Surface {2};
+//Transfinite Surface {1};
 //+
-Transfinite Surface {3};
+//Transfinite Surface {3};
 //+
-Transfinite Surface {4};
+//Transfinite Surface {4};
 //+
-Transfinite Surface {5};
+//Transfinite Surface {5};
 //+
-Transfinite Surface {6};
+//Transfinite Surface {6};
 Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
@@ -87,13 +91,31 @@ else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
     filed.write(geo_file_content)
-os.system('gmsh -2 {}.mesh/{}.geo -format msh2'.format(nombre,nombre))
-os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
-print('malla terminada')
-#definimos la malla apartirde los archivos xml
-mesh=Mesh("%s.mesh/"%(nombre)+ nombre+".xml")
-contorno = MeshFunction("size_t", mesh,"%s.mesh/"%(nombre)+nombre+"_facet_region.xml")
-subd= MeshFunction("size_t",mesh,"%s.mesh/"%(nombre)+nombre+"_physical_region.xml")
+os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
+
+#%%
+# msh = meshio.read("%s.mesh/%s.msh"%(nombre,nombre))
+# triangle_mesh = create_mesh(msh, "triangle", True)
+# line_mesh = create_mesh(msh, "line")
+
+# meshio.write("mesh.xdmf", triangle_mesh)
+# meshio.write("%s.mesh/%s_mesh.xdmf"%(nombre,nombre),triangle_mesh)
+# meshio.write("%s.mesh/%s_facets.xdmf"%(nombre,nombre), line_mesh)
+#%%
+mesh = Mesh()
+
+mvc = MeshValueCollection("size_t", mesh, 2)
+with XDMFFile("%s.mesh/%s_mesh.xdmf"%(nombre,nombre)) as infile:
+    infile.read(mesh)
+    infile.read(mvc)
+subd = cpp.mesh.MeshFunctionSizet(mesh, mvc)
+
+mvc = MeshValueCollection("size_t", mesh, 1)
+with XDMFFile("%s.mesh/%s_facets.xdmf"%(nombre,nombre)) as infile:
+    infile.read(mvc)
+contorno = cpp.mesh.MeshFunctionSizet(mesh, mvc)
+
+#%%%
 vtkfile_u = File('%s.results3/u.pvd' % (nombre))
 vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
 vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
@@ -173,10 +195,10 @@ q, v = split(V)
 
 
 
-steps =1000
+steps =10000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=20#tiempo total
+Ti=5#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 #B_s=1E-11
@@ -252,7 +274,7 @@ bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
 
 
 
-X_n=Expression(('-gam*x[1]','0','0'), gam=gam,degree=3)
+X_n=Expression(('0','0','0'), gam=gam,degree=3)
 X_n=interpolate(X_n, W)
 #X_n = Function(W)
 p_n, u_n = split(X_n)
@@ -278,15 +300,14 @@ R= R_mass +R_momentum
 X = Function(W)
 
 for pot in range(steps):
-    # if t<5:
-    #     Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
-    #     bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-    #     bcs=[bc1,bc2,bc3,bp1]
-    # else:
-    #     Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=5,r=r ,degree=1)
-    #     bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-    #     bcs=[bc1,bc2,bc3,bp1]
-    bcs=[bc1,bc2,bp1]
+    if t<1:
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
+        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        bcs=[bc1,bc2,bc3,bp1]
+    else:
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=1,r=r ,degree=1)
+        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
     A=assemble(L)
     b=assemble(R)
@@ -299,7 +320,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 1== 0:
+    if pot % 100== 0:
         print('postproces')
         s = sigma(u_)
         

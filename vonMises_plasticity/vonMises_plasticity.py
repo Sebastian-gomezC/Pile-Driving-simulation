@@ -52,11 +52,19 @@ from dolfin import *
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import sys
+import meshio
 parameters["form_compiler"]["representation"] = 'quadrature'
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 warnings.simplefilter("once", QuadratureRepresentationDeprecationWarning)
-
+def create_mesh(mesh, cell_type, prune_z=False):
+        cells = mesh.get_cells_type(cell_type)
+        cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
+        out_mesh = meshio.Mesh(points=mesh.points, cells={cell_type: cells}, cell_data={"name_to_read":[cell_data]})
+        if prune_z:
+            out_mesh.prune_z_0()
+        return out_mesh
 
 # The material is represented by an isotropic elasto-plastic von Mises yield condition
 # of uniaxial strength :math:`\sigma_0` and with isotropic hardening of modulus :math:`H`.
@@ -74,57 +82,88 @@ warnings.simplefilter("once", QuadratureRepresentationDeprecationWarning)
 # Only a quarter of cylinder is generated using ``Gmsh`` and converted to ``.xml`` format. ::
 
 # elastic parameters
-E = Constant(5000000)
+E = Constant(78000)
 nu = Constant(0.35)
 lmbda = E*nu/(1+nu)/(1-2*nu)
 mu = E/2./(1+nu)
-sig0 = Constant(2500)  # yield strength
-Et = E/1000.  # tangent modulus
+sig0 = Constant(121000)  # yield strength
+Et = 11.7  # tangent modulus
 H = E*Et/(E-Et)  # hardening modulus
 
 test_geo="""SetFactory("OpenCASCADE");
-ancho = 5;
-prof =3;
-Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-Rectangle(2) = {0, prof, 0,ancho/2-0.3, -0.1, 0};
-Rectangle(3) = {ancho/2+0.3, prof, 0,ancho/2-0.3, -0.1, 0};
-BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
-Rectangle(4) = {ancho/2-0.3,prof,0,0.6,-0.1,0};
-BooleanDifference{ Surface{1}; Delete; }{ Surface{4}; Delete; }
-Physical Line("disp",1) = {6,4};
-Physical Line("load",2) = {2};
-//Physical Line("level",3) = {1,5,6};
-Physical Line("far",5) = {5};
-Physical Surface("soil",1)={1};
-Transfinite Curve {2} = 80 ;
-Transfinite Curve {4} = 40 Using Progression 0.98 ;
-Transfinite Curve {6} = 40 Using Progression 1.02 ;
-Transfinite Curve {5} = 20;
-Transfinite Curve {1,3} = 60;
+Rectangle(1) = {0, 0, 0, 0.0336, 0.0773, 0};
+//+
+Physical Curve("load", 1) = {3};
+//+
+Physical Curve("far", 2) = {1};
+//+
+Physical Curve("borders", 3) = {4, 2};
+//+
+}Physical Surface("soil", 1) = {1};
+Transfinite Curve {3, 1} = 25 Using Progression 1;
+//+
+Transfinite Curve {4, 2} = 50 Using Progression 1;
+//+
+Transfinite Surface {1};
 Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 """
-nombre = 'plastic'
 
+# """SetFactory("OpenCASCADE");
+# ancho = 5;
+# prof =3;
+# Rectangle(1) = {0, 0, 0, ancho, prof, 0};
+# Rectangle(2) = {0, prof, 0,ancho/2-0.3, -0.1, 0};
+# Rectangle(3) = {ancho/2+0.3, prof, 0,ancho/2-0.3, -0.1, 0};
+# BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
+# Rectangle(4) = {ancho/2-0.3,prof,0,0.6,-0.1,0};
+# BooleanDifference{ Surface{1}; Delete; }{ Surface{4}; Delete; }
+# Physical Line("disp",1) = {6,4};
+# Physical Line("load",2) = {2};
+# //Physical Line("level",3) = {1,5,6};
+# Physical Line("far",5) = {5};
+# Physical Surface("soil",1)={1};
+# Transfinite Curve {2} = 80 ;
+# Transfinite Curve {4} = 40 Using Progression 0.98 ;
+# Transfinite Curve {6} = 40 Using Progression 1.02 ;
+# Transfinite Curve {5} = 20;
+# Transfinite Curve {1,3} = 60;
+# Mesh 2 ;
+# Mesh.MshFileVersion = 2.2;
+# """
+nombre = 'plastic'
+flag = sys.argv[1]
 if os.path.exists("%s.mesh"%(nombre)):
         a=os.path.exists("%s.mesh"%(nombre))
 else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
     filed.write(test_geo)
-os.system('gmsh -2 {}.mesh/{}.geo -format msh2'.format(nombre,nombre))
-os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
-print('malla terminada')
-#definimos la malla apartirde los archivos xml
-mesh=Mesh("%s.mesh/"%(nombre)+ nombre+".xml")
+#os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
+if flag == 'W':
+    msh = meshio.read("%s.mesh/%s.msh"%(nombre,nombre))
+    triangle_mesh = create_mesh(msh, "triangle", True)
+    line_mesh = create_mesh(msh, "line", True)
+    meshio.write("%s.mesh/%s_mesh.xdmf"%(nombre,nombre),triangle_mesh)
+    meshio.write("%s.mesh/%s_facets.xdmf"%(nombre,nombre), line_mesh)
+elif flag == 'R':
+    mesh = Mesh()
+    mvc = MeshValueCollection("size_t", mesh, 2)
+    with XDMFFile("%s.mesh/%s_mesh.xdmf"%(nombre,nombre)) as infile:
+        infile.read(mesh)
+        infile.read(mvc)
+    subdominio = cpp.mesh.MeshFunctionSizet(mesh, mvc)
 
-facets = MeshFunction("size_t", mesh,"%s.mesh/"%(nombre)+nombre+"_facet_region.xml")
-subd= MeshFunction("size_t",mesh,"%s.mesh/"%(nombre)+nombre+"_physical_region.xml")
-vtkfile_u = File('%s.plastic/u.pvd' % (nombre))
-vtkfile_fs = File('%s.plastic/Mohr-Coulomb_Fs.pvd' % (nombre))
-vtkfile_p = File('%s.plastic/Pressure.pvd' % (nombre))
+    mvc = MeshValueCollection("size_t", mesh, 1)
+    with XDMFFile("%s.mesh/%s_facets.xdmf"%(nombre,nombre)) as infile:
+        infile.read(mvc)
+    contorno = cpp.mesh.MeshFunctionSizet(mesh, mvc)
+#%%%
+vtkfile_u = File('%s.results3/u.pvd' % (nombre))
+vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
+vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
 vtkfile_flow = File('%s.plastic/flow.pvd' % (nombre))
-ds =  Measure('ds', domain=mesh, subdomain_data=facets)
+ds =  Measure('ds', domain=mesh, subdomain_data=contorno)
 TS = TensorFunctionSpace(mesh, "CG", 1)
 
 # Function spaces will involve a standard CG space for the displacement whereas internal
@@ -139,7 +178,7 @@ TS = TensorFunctionSpace(mesh, "CG", 1)
 # ``degree=3`` yields 6 Gauss points (note that this is suboptimal))::
 
 deg_u = 2
-deg_stress = 2
+deg_stress = 6
 V = VectorFunctionSpace(mesh, "CG", deg_u)
 We = VectorElement("Quadrature", mesh.ufl_cell(), degree=deg_stress, dim=4, quad_scheme='default')
 W = FunctionSpace(mesh, We)
@@ -152,9 +191,6 @@ Z= FunctionSpace(mesh, 'P', 1)
 #  FEniCS 2016.1 (see `this issue <https://bitbucket.org/fenics-project/dolfin/issues/757/functionspace-mesh-quadrature-1-broken-in>`_). Instead, Quadrature elements must first be defined
 #  by specifying the associated degree and quadrature scheme before defining the
 #  associated FunctionSpace.
-#
-#
-#
 # Various functions are defined to keep track of the current internal state and
 # currently computed increments::
 
@@ -175,15 +211,15 @@ u_ = TestFunction(V)
 # :math:`q_{lim}=\dfrac{2}{\sqrt{3}}\sigma_0\log\left(\dfrac{R_e}{R_i}\right)`
 # which is the analytical collapse load for a perfectly-plastic material (no hardening)::
 
-bc = [DirichletBC(V.sub(0), 0, facets, 1), DirichletBC(V, ((0,0)), facets, 5)]
+bc = [ DirichletBC(V, ((0,0)), contorno, 2)]#DirichletBC(V.sub(0), ((0)), contorno, 3),
 
 
 n = FacetNormal(mesh)
 #q_lim = float(2/sqrt(3)*ln(Re/Ri)*sig0)
-loading = Expression(('0','-k*10000'),k=0,degree=2)
+loading = Expression(('0','-k'),k=0,degree=2)
 
 def F_ext(v):
-    return inner(loading, v)*ds(2)
+    return inner(loading, v)*ds(1)
 
 # -----------------------------
 # Constitutive relation update
@@ -369,12 +405,12 @@ def epsilon(u):
 def sigma_plane(u):
     return lmbda*div(u)*Identity(2) + 2*mu*epsilon(u)
 Nitermax, tol = 10, 1e-8  # parameters of the Newton-Raphson procedure
-Nincr = 60
+Nincr = 1000
 load_steps = np.linspace(0, 1, Nincr+1)[1:]
-results = np.zeros((Nincr+1, 2))
+results = np.array([[0,0]])
 for (i, t) in enumerate(load_steps):
 
-    loading.k = 0.5*np.sin(t*np.pi)
+    loading.k = 250000*t
     A, Res = assemble_system(a_Newton, res, bc)
     nRes0 = Res.norm("l2")
     nRes = nRes0
@@ -406,32 +442,27 @@ for (i, t) in enumerate(load_steps):
 # at each time increment, the plastic strain must first be projected onto the
 # previously defined DG FunctionSpace. We also monitor the value of the cylinder
 # displacement on the inner boundary. The load-displacement curve is then plotted::
+    if i % 10 ==0:
+        u.rename("displacement", "displacement") ;vtkfile_u << u
+        s = sigma_plane(u)
+        cauchy=project(s,TS)
 
-    u.rename("displacement", "displacement") ;vtkfile_u << u
-    s = sigma_plane(u)
-    cauchy=project(s,TS)
-
-    o1 = sigma_1(cauchy)
-    
-    o2 = sigma_3(cauchy)
-    fs=(o1-o2)/2
-    
-    fs=project(fs,Z)
-    fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
-    p_avg.assign(project(p, P0))
-    p_avg.rename("Plastic strain", "Plastic strain"); vtkfile_p << p_avg
-    results[i+1, :] =(np.linalg.norm(u(2.5,2.5)), 0.5*np.sin(t*np.pi)*10000)
-    plt.plot(results[:, 0], results[:, 1], "-o")
-    plt.xlabel("Displacement ")
-    plt.ylabel("Morh-coulomb mean stress")
-    plt.show()
-    plt.clf()
-
-plt.plot(results[:, 0], results[:, 1], "-o")
-plt.xlabel("Displacement of inner boundary")
-plt.ylabel(r"Applied pressure $q/q_{lim}$")
-plt.show()
-
+        o1 = sigma_1(cauchy)
+        
+        o2 = sigma_3(cauchy)
+        fs=(o1-o2)/2
+        
+        fs=project(fs,Z)
+        fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
+        p_avg.assign(project(p, P0))
+        p_avg.rename("Plastic strain", "Plastic strain"); vtkfile_p << p_avg
+        results =np.append(results,np.array([[np.linalg.norm(u(0.0336/2,0.0773))/0.0773, 250000*t]]),axis=0)
+        print(results)
+        plt.plot(results[:, 0], results[:, 1], "-o")
+        plt.xlabel("Displacement ")
+        plt.ylabel("Morh-coulomb mean stress")
+        plt.savefig('plots/step_%s.png'%(i))
+        plt.close()
 # The load-displacement curve looks as follows:
 #
 # .. image:: cylinder_expansion_load_displ.png

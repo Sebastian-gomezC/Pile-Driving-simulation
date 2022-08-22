@@ -228,7 +228,7 @@ F1 = inner(sigma(u), epsilon(v))*dx - gamma*p*nabla_div(v)*dx\
     - inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
      #+ 100*inner((sigma(u)-sigma(u_n)),epsilon(v))*dx
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx +s_coef*(p-p_n)*q*dx\
+    gamma*(nabla_div(u-u_n))*q*dx +s_coef*(p-p_n)*q*dx\
         -dt*inner(flo,n)*q*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
 
 
