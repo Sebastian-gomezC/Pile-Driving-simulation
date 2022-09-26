@@ -2,10 +2,5 @@
 <VTKFile type="Collection" version="0.1">
   <Collection>
     <DataSet timestep="0" part="0" file="u000000.vtu" />
-    <DataSet timestep="1" part="0" file="u000001.vtu" />
-    <DataSet timestep="2" part="0" file="u000002.vtu" />
-    <DataSet timestep="3" part="0" file="u000003.vtu" />
-    <DataSet timestep="4" part="0" file="u000004.vtu" />
-    <DataSet timestep="5" part="0" file="u000005.vtu" />
   </Collection>
 </VTKFile>

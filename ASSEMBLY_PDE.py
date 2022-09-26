@@ -161,7 +161,7 @@ class KM(UserExpression):
     def eval_cell(self, values, x, cell):
         if self.subdominio[cell.index] == 1:
             values = self.k_0
-        elif self.subdominio[cell.index] == 2:
+        elif self.subdominio[cell.index] == 2:root@d40cf06f6a22:/home/fenics/shared# 
             values = self.k_1
         elif self.subdominio[cell.index] == 3:
             values = self.k_2
@@ -281,13 +281,11 @@ p_n, u_n = split(X_n)
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 T=Constant((0,0))
 print('PDE formulation')
-F1 = inner(sigma(u), epsilon(v))*dx - gamma*p*nabla_div(v)*dx\
-    - inner(f, v)*dx \
-    #- inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)\
-     #+ 100*inner((sigma(u)-sigma(u_n)),epsilon(v))*dx
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx +\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx +s_coef*(p-p_n)*q*dx\
-        -dt*inner(flo,n)*q*ds(subdomain_id=3,domain=mesh, subdomain_data=contorno) -dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
+    -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
+F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
+    + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
+    -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
 
 print('L and R form ')
 L_momentum =lhs(F1)
