@@ -22,7 +22,7 @@ from ufl.tensors import as_matrix
 import  sys
 import meshio
 import mshr
-flag = sys.argv[1]
+flag ="R"
 parameters['allow_extrapolation'] = True
 nombre = 'Terzaghi'
 def create_mesh(mesh, cell_type, prune_z=False):
@@ -33,8 +33,15 @@ def create_mesh(mesh, cell_type, prune_z=False):
             out_mesh.prune_z_0()
         return out_mesh
 print('creando malla..')
-geo = mshr.Rectangle(Point(-0.05, 0.0), Point(0.05,-1))
-mesh = mshr.generate_mesh(geo,5)
+mesh=RectangleMesh(Point(-0.25, 0.0), Point(0.25,-1), 10, 20,"crossed")
+# cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
+# cell_markers.set_all(False)
+# class fine(SubDomain):
+#         def inside(self, x, on_boundary):
+#             return  x[1]>=-0.1
+# fine().mark(cell_markers, True)
+# mesh = refine(mesh, cell_markers)
+
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 tol =1E-3
 class load(SubDomain):
@@ -45,7 +52,7 @@ class bound(SubDomain):
             return on_boundary and abs(x[1]+1)< tol 
 class walls(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and ((abs(x[0]+0.05)< tol) or (abs(x[0]-0.05)< tol) )
+            return on_boundary and ((abs(x[0]+0.25)< tol) or (abs(x[0]-0.25)< tol) )
 load().mark(contorno, 2)
 bound().mark(contorno, 5)
 walls().mark(contorno, 1)
@@ -125,27 +132,27 @@ q, v = split(V)
 steps =5000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=0.05#tiempo total
+Ti=0.008#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
 # B_m=1E-10
 B_f=4.4E-10
 
-Poro=0.05
-nu=0.25#coeficiente de poisson  
+Poro=0.3
+nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-#E=1729000#K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
-B_m=1.0E-10
-B_s=1.0E-11
-alpha=1#(1-B_s/B_m) #biotcoef
+E=50000000# #modulo elasticidad
+B_m=(E/(3*(1-2*nu)))**(-1)
+B_s=B_m/10
+alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
 
-E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
+# E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 print('modulo elasticidad ',E)
-mu = E/2/(1+nu)#coeficientes de Lame
+mu = E/(2*(1+nu))#coeficientes de Lame
 rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
@@ -179,8 +186,8 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
       
-
-k=1.12E-14/8.9E-4
+kappa=5E-10
+k=kappa/8.9E-4
 K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
@@ -192,7 +199,7 @@ bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,5)
 
 
 
-x_n=Expression(('5E9','0','0'), gam=gam,degree=3)
+x_n=Expression(('0','0','0'), gam=gam,degree=3)
 X_n = Function(W)
 X_n=interpolate(x_n, W)
 p_n, u_n = split(X_n)
@@ -201,8 +208,8 @@ X_nn=Function(W)
 X_nn=interpolate(x_n, W)
 p_nn, u_nn = split(X_nn)
 #
-pconst=[3./2,-2,1./2,0.0]
-#pconst=[1,-1,0,0]
+#pconst=[3./2,-2,1./2,0.0]
+pconst=[1,-1,0,0]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
@@ -220,7 +227,7 @@ dp_t=dp+dp_n+dp_nn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-5E9))
+T=Constant((0,-5E7))
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
@@ -233,20 +240,19 @@ L_mass=lhs(F2)
 R_mass=rhs(F2)
 L=L_momentum+L_mass
 R=R_momentum+R_mass
-snaps=200
-mv=((1/B_m)+((6*(1-2*nu))/(B_m*(1+nu))))**(-1)
+snaps=100
+mv=1/((1/B_m)+((4/3)*mu))
 cv=k/(alpha**2*mv+s_coef)
-p0= ((alpha*mv)/(alpha**2*mv+s_coef))*5E9
+p0= ((alpha*mv)/(alpha**2*mv+s_coef))*5E7
 def p_analitico(time,snaps,cv,p0):
     z=0
     for n in range(snaps):
-        
         for i in range(100):
                 if i==0:
                     p=0
                 else:
                     c=math.sin((2*i-1)*math.pi*(z)/(2))
-                    b=math.exp(-(((2*i-1)*math.pi)/(2*0.1))**2*cv*time)
+                    b=math.exp(-(((2*i-1)*math.pi)/(2*1))**2*cv*time)
                     d=((1)/(2*i-1))
                     p=p+d*c*b
         p=4/math.pi*(p)
@@ -256,15 +262,29 @@ def p_analitico(time,snaps,cv,p0):
             a= np.append(a,np.array([[p,z]]),axis=0)
         z=z+1/snaps
     return a
+def u_analitico(time,snaps,cv,p0):
+    c=-mv*5e7*1
+    for i in range(100):
+            if i==0:
+                p=0
+            else:
+                b=math.exp(-(((2*i-1)*math.pi)/(2*1))**2*cv*time)
+                d=((1)/(2*i-1)**2)
+                p+=b*d
+    a=8*alpha*mv*1/(math.pi**2)*p0*(p)+c
+    return a
 
 X_w = Function(W)
 bcs=[bc1,bc2,bp1]
 f = plt.figure()
 f.set_figwidth(10)
 f.set_figheight(10)
+L2=[]
+uplot=[]
+u_f=mv*5E7
 ig, ax = plt.subplots()
 for pot in range(steps):
-
+    
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
@@ -278,9 +298,9 @@ for pot in range(steps):
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
     if pot==0:
-        p_0=p_(0.00,-0.1)
-        print(' p diference                                           ____________________------ ', p_0)
-    tdot=(cv/0.1**2)*t
+        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*5e7
+        p_0=5E7#p_(0.00,-0.1)
+    tdot=(cv/1**2)*t
     s = sigma(u_)
     cauchy=project(s,TS)
 
@@ -294,19 +314,19 @@ for pot in range(steps):
     fs=project(tm,Z)
     flow=-K*grad(p_)
     flow=project(flow,Z_v)
-    z_=0
-    for k in range(snaps):
-        pdot=p_(0.0,z_*1)/p_0
-        if k ==0:
-            results=np.array([[pdot,-z_]])
-        else:
-            results =np.append(results,np.array([[pdot,-z_]]),axis=0)
-        z_=z_- 1/snaps
-    p_a = p_analitico(t,snaps,cv,p0)
-    print('error en la norma l2',np.sum(np.power((results-p_a),2)) )
-    if near(tdot,0.01,0.0001): #or near(tdot,0.02,0.0001) or near(tdot,0.05,0.0001) or near(tdot,0.1,0.0001) or near(tdot,0.5,0.0001)or near(tdot,1,0.0001)or near(tdot,2,0.0001) :
-        f
-        line1, =ax.plot(results[:, 0], results[:, 1], "-",color='silver',label='fem solution')
+    uplot.append([(u_analitico(t, snaps, cv, p0)-u_0dot)/(u_f-u_0dot),(u_(0,0)[1]-u_0dot)/(u_f-u_0dot),tdot])
+    print(tdot)
+    if near(t,0.01/(cv/1**2),dt/2) or near(t,0.02/(cv/1**2),dt/2) or near(t,0.05/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2)or near(t,2/(cv/1**2),dt/2) :
+        
+        z_=0
+        for k in range(snaps):
+            pdot=p_(0.0,z_*1)/p0
+            if k ==0:
+                results=np.array([[pdot,-z_]])
+            else:
+                results =np.append(results,np.array([[pdot,-z_]]),axis=0)
+            z_=z_- 1/snaps
+        line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='fem solution')
         plt.xlabel("P* ")
         plt.ylabel("z*")
         p_a = p_analitico(t,snaps,cv,p0)
@@ -315,14 +335,21 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-        ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)})
-        plt.savefig('plot_compare%s.png'%(tdot))
-        exit()
-    print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
-    print('p max:', p_.vector().get_local().max()/p_0)
-    print('p min:', p_.vector().get_local().min())
+        if near(t,0.01/(cv/1**2),dt/2) :
+            ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)})
+        plt.ylim((0,1))
+        plt.xlim((0,1))
+        print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
+        L2.append([np.sum((results[:,0]-p_a[:,0])**2),pot])
+        
+        print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
+        print('p max:', p_.vector().get_local().max())
+        print('p min:', p_.vector().get_local().min())
     
     t=t+delta
-plt.savefig('plot_compare.png')
+plt.savefig('plot_compare35.png')
+plt.show()
 plt.close()
-
+uplot=np.array(uplot)
+plt.semilogx(uplot[:,2],-uplot[:,0])
+plt.semilogx(uplot[:,2],-uplot[:,1])
