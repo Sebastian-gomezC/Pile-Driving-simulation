@@ -129,7 +129,7 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 
 p, u = split(U)
 q, v = split(V)
-steps =5000
+steps =6000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
 Ti=0.008#tiempo total
@@ -186,7 +186,7 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
       
-kappa=5E-10
+kappa=5E-9
 k=kappa/8.9E-4
 K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
@@ -282,6 +282,7 @@ f.set_figheight(10)
 L2=[]
 uplot=[]
 u_f=mv*5E7
+print('u final',u_f)
 ig, ax = plt.subplots()
 for pot in range(steps):
     
@@ -314,7 +315,7 @@ for pot in range(steps):
     fs=project(tm,Z)
     flow=-K*grad(p_)
     flow=project(flow,Z_v)
-    uplot.append([(u_analitico(t, snaps, cv, p0)-u_0dot)/(u_f-u_0dot),(u_(0,0)[1]-u_0dot)/(u_f-u_0dot),tdot])
+    uplot.append([(u_analitico(t, snaps, cv, p0)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
     print(tdot)
     if near(t,0.01/(cv/1**2),dt/2) or near(t,0.02/(cv/1**2),dt/2) or near(t,0.05/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2)or near(t,2/(cv/1**2),dt/2) :
         
@@ -353,3 +354,5 @@ plt.close()
 uplot=np.array(uplot)
 plt.semilogx(uplot[:,2],-uplot[:,0])
 plt.semilogx(uplot[:,2],-uplot[:,1])
+plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
+plt.savefig('plot_compare36.png')

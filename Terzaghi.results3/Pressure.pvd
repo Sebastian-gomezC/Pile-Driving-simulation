@@ -5,5 +5,8 @@
     <DataSet timestep="1" part="0" file="Pressure000001.vtu" />
     <DataSet timestep="2" part="0" file="Pressure000002.vtu" />
     <DataSet timestep="3" part="0" file="Pressure000003.vtu" />
+    <DataSet timestep="4" part="0" file="Pressure000004.vtu" />
+    <DataSet timestep="5" part="0" file="Pressure000005.vtu" />
+    <DataSet timestep="6" part="0" file="Pressure000006.vtu" />
   </Collection>
 </VTKFile>
