@@ -206,7 +206,7 @@ dt=Constant((delta))
 # B_s=1E-11
 # B_m=1E-10
 B_f=4.4E-10
-r=0.3
+r=0.1
 Poro=0.3
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
@@ -299,10 +299,11 @@ dp_t=dp+dp_n+dp_nn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,0))
+#
+T=Expression(('0','x[1] <-I  ? 0 :  -50000*I '),I=t,r=r ,degree=2)
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
-    -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
+    -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
      + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
     -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)-dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=3,domain=mesh, subdomain_data=contorno) 
@@ -317,11 +318,13 @@ X = Function(W)
 for pot in range(steps):
     if t<1:
         Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
+        T.I=t
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
         bcs=[bc1,bc2,bc3,bp1]
     else:
         Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=1,r=r ,degree=1)
-        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        T.I=0
+        T.assign(Constant((0,0)))
         bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
     A=assemble(L)

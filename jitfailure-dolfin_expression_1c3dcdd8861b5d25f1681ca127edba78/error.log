@@ -1,0 +1,11 @@
+/tmp/tmpdkyxtv3r/dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78.cpp: In member function ‘virtual void dolfin::dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmpdkyxtv3r/dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78.cpp:64:62: error: expected ‘)’ before ‘:’ token
+           values[1] = x[1] <-I  ? 0 : (x[1] > -I  -5000000*I : 0);
+                                                              ^
+/tmp/tmpdkyxtv3r/dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78.cpp: In member function ‘virtual double dolfin::dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78::get_property(std::__cxx11::string) const’:
+/tmp/tmpdkyxtv3r/dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78.cpp:76:11: warning: this ‘if’ clause does not guard... [-Wmisleading-indentation]
+           if (name == "I") return I;          if (name == "r") return r;
+           ^~
+/tmp/tmpdkyxtv3r/dolfin_expression_1c3dcdd8861b5d25f1681ca127edba78.cpp:76:47: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the ‘if’
+           if (name == "I") return I;          if (name == "r") return r;
+                                               ^~
