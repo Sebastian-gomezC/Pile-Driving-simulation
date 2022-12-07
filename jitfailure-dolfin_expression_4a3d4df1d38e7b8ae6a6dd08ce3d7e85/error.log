@@ -1,0 +1,4 @@
+/tmp/tmpv7cue3zt/dolfin_expression_4a3d4df1d38e7b8ae6a6dd08ce3d7e85.cpp: In member function 'virtual void dolfin::dolfin_expression_4a3d4df1d38e7b8ae6a6dd08ce3d7e85::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const':
+/tmp/tmpv7cue3zt/dolfin_expression_4a3d4df1d38e7b8ae6a6dd08ce3d7e85.cpp:61:29: error: 'visco' was not declared in this scope
+           values[0] = 1E-11/visco;
+                             ^~~~~

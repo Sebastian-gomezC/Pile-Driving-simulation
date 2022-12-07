@@ -22,9 +22,10 @@ from ufl.tensors import as_matrix
 import  sys
 import meshio
 import mshr
+from label_lines import *
 flag ="R"
 parameters['allow_extrapolation'] = True
-nombre = 'Terzaghi'
+nombre = 'Terzaghi_low'
 def create_mesh(mesh, cell_type, prune_z=False):
         cells = mesh.get_cells_type(cell_type)
         cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
@@ -34,6 +35,8 @@ def create_mesh(mesh, cell_type, prune_z=False):
         return out_mesh
 print('creando malla..')
 mesh=RectangleMesh(Point(-0.25, 0.0), Point(0.25,-1), 10, 20,"crossed")
+#geo = mshr.Rectangle(Point(-0.25, 0.0), Point(0.25,-1))
+#mesh = mshr.generate_mesh(geo,25)
 # cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 # cell_markers.set_all(False)
 # class fine(SubDomain):
@@ -123,16 +126,17 @@ W = FunctionSpace(mesh, W)
 U = TrialFunction(W)
 V = TestFunction(W)
 Z= FunctionSpace(mesh, 'P', 1)
+Z_d= FunctionSpace(mesh, 'DG', 0)
 Z_v = VectorFunctionSpace(mesh, 'P', 1)
 TS = TensorFunctionSpace(mesh, "P", 1)
 
 
 p, u = split(U)
 q, v = split(V)
-steps =6000
+steps =500
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=0.008#tiempo total
+Ti=0.01#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
@@ -207,23 +211,34 @@ p_n, u_n = split(X_n)
 X_nn=Function(W)
 X_nn=interpolate(x_n, W)
 p_nn, u_nn = split(X_nn)
+
+X_nnn=Function(W)
+X_nnn=interpolate(x_n, W)
+p_nnn, u_nnn = split(X_nnn)
 #
-#pconst=[3./2,-2,1./2,0.0]
-pconst=[1,-1,0,0]
+#pconst=[3./2,-2,1./2,0.0] #bdf2
+#pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
+#pconst= [11/6,-3,3/2,-1/3] #bdf 3
+pconst=[1,-1,0,0] #bdf1
+types=['BDF1','BDF2','BDF2op','BDF3']
+scheme=types[0]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
-du_t= du+du_n +du_nn
+du_nnn=pconst[3]*u_nnn
+du_t= du+du_n +du_nn +du_nnn
 
 divu=pconst[0]*nabla_div(u)
 divu_n=pconst[1]*nabla_div(u_n)
 divu_nn=pconst[2]*nabla_div(u_nn)
-divu_t= divu+divu_n +divu_nn
+divu_nnn=pconst[3]*nabla_div(u_nnn)
+divu_t= divu+divu_n +divu_nn+divu_nnn
 
-dp=1*p
-dp_n=-1*p_n
-dp_nn=0*p_nn
-dp_t=dp+dp_n+dp_nn
+dp=pconst[0]*p
+dp_n=pconst[1]*p_n
+dp_nn=pconst[2]*p_nn
+dp_nnn=pconst[3]*p_nnn
+dp_t=dp+dp_n+dp_nn+dp_nnn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
@@ -284,6 +299,7 @@ uplot=[]
 u_f=mv*5E7
 print('u final',u_f)
 ig, ax = plt.subplots()
+dtdot=(cv/1**2)*delta
 for pot in range(steps):
     
     #A=assemble(L)
@@ -292,6 +308,8 @@ for pot in range(steps):
     #[bc.apply(b) for bc in bcs]
 
     solve(L==R,X_w,bcs)
+    X_nnn.assign(X_nn)
+    p_nnn, u_nnn = split(X_nnn)
     X_nn.assign(X_n)
     p_nn, u_nn = split(X_nn)
     X_n.assign(X_w)
@@ -302,57 +320,78 @@ for pot in range(steps):
         u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*5e7
         p_0=5E7#p_(0.00,-0.1)
     tdot=(cv/1**2)*t
-    s = sigma(u_)
-    cauchy=project(s,TS)
+    if pot%(steps/50) ==0:
+        s = sigma(u_)
+        cauchy=project(s,TS)
 
-    o1 = sigma_1(cauchy)
-        
-    o2 = sigma_3(cauchy)
-        
-    tm=(o1-o2)/2
-    fail = envFalla(o1, o2,theta,C)
-    #fs = fail/tm
-    fs=project(tm,Z)
-    flow=-K*grad(p_)
-    flow=project(flow,Z_v)
-    uplot.append([(u_analitico(t, snaps, cv, p0)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
-    print(tdot)
-    if near(t,0.01/(cv/1**2),dt/2) or near(t,0.02/(cv/1**2),dt/2) or near(t,0.05/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2)or near(t,2/(cv/1**2),dt/2) :
-        
-        z_=0
-        for k in range(snaps):
-            pdot=p_(0.0,z_*1)/p0
-            if k ==0:
-                results=np.array([[pdot,-z_]])
-            else:
-                results =np.append(results,np.array([[pdot,-z_]]),axis=0)
-            z_=z_- 1/snaps
-        line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='fem solution')
-        plt.xlabel("P* ")
-        plt.ylabel("z*")
-        p_a = p_analitico(t,snaps,cv,p0)
-        line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='analitical')
+        o1 = sigma_1(cauchy)
+            
+        o2 = sigma_3(cauchy)
+            
+        tm=-o2#(o1-o2)/2
+        fail = envFalla(o1, o2,theta,C)
+        fs = tm
+        fs=project(fs,Z)
+        flow=-K*grad(p_)
+        flow=project(flow,Z_v)
         fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
+    uplot.append([(u_analitico(t, snaps, cv, p0)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
+    print(tdot)
+    z_=0
+    for k in range(snaps):
+        pdot=p_(0.0,z_*1)/p0
+        if k ==0:
+            results=np.array([[pdot,-z_]])
+        else:
+            results =np.append(results,np.array([[pdot,-z_]]),axis=0)
+        z_=z_- 1/snaps
+    p_a = p_analitico(t,snaps,cv,p0)
+    L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
+    if near(t,0.01/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2):
+        
+        
+        line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='FEM',)
+        plt.xlabel("$P*$ ")
+        plt.ylabel("$z*$")
+        line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='Analítica')
+        
+        lines = plt.gca().get_lines()
+        l1=lines[-1]
+        labelLine(l1,0.4,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
         if near(t,0.01/(cv/1**2),dt/2) :
-            ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)})
-        plt.ylim((0,1))
-        plt.xlim((0,1))
+            ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
+            
+        plt.ylim((0,1.02))
+        plt.xlim((0,1.02))
         print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
-        L2.append([np.sum((results[:,0]-p_a[:,0])**2),pot])
+        
         
         print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
         print('p max:', p_.vector().get_local().max())
         print('p min:', p_.vector().get_local().min())
-    
+    if near(t,2/(cv/1**2),dt/2):
+        break
     t=t+delta
-plt.savefig('plot_compare35.png')
-plt.show()
+plt.savefig('resultados/consolidacion_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
+ig, ax = plt.subplots()
 uplot=np.array(uplot)
-plt.semilogx(uplot[:,2],-uplot[:,0])
-plt.semilogx(uplot[:,2],-uplot[:,1])
+line1, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
+line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
+ax.set_xscale('log')
+plt.xlabel("$t*$ ")
+plt.ylabel("$u*_{z}$")
 plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('plot_compare36.png')
+plt.savefig('resultados/disp_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.close()
+
+L2=np.array(L2)
+plt.semilogy(L2[:,1],L2[:,0])
+plt.savefig('resultados/L2norm_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
+np.savetxt('resultados/L2norm_dt%s_fine_%s.out'%(round(dtdot,5),scheme), (L2)) 
+plt.close()
+

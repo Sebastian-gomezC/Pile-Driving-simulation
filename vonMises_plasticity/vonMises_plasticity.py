@@ -82,29 +82,34 @@ def create_mesh(mesh, cell_type, prune_z=False):
 # Only a quarter of cylinder is generated using ``Gmsh`` and converted to ``.xml`` format. ::
 
 # elastic parameters
-E = Constant(78000)
-nu = Constant(0.35)
+E = Constant(2729000)
+nu = Constant(0.3)
 lmbda = E*nu/(1+nu)/(1-2*nu)
 mu = E/2./(1+nu)
-sig0 = Constant(121000)  # yield strength
-Et = 11.7  # tangent modulus
+sig0 = Constant(10000)  # yield strength
+Et = 279000 # tangent modulus
 H = E*Et/(E-Et)  # hardening modulus
 
 test_geo="""SetFactory("OpenCASCADE");
-Rectangle(1) = {0, 0, 0, 0.0336, 0.0773, 0};
-//+
-Physical Curve("load", 1) = {3};
-//+
-Physical Curve("far", 2) = {1};
-//+
-Physical Curve("borders", 3) = {4, 2};
-//+
-}Physical Surface("soil", 1) = {1};
-Transfinite Curve {3, 1} = 25 Using Progression 1;
-//+
-Transfinite Curve {4, 2} = 50 Using Progression 1;
-//+
-Transfinite Surface {1};
+ancho = 10;
+prof =-3;
+Rectangle(1) = {0, 0, 0, ancho, prof, 0};
+Rectangle(2) = {ancho/2-0.2, 0, 0,0.4, -0.4, 0};
+Rectangle(3) = {ancho/2-0.5, -0.4, 0,1, -0.2, 0};
+BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
+
+
+Physical Line("disp",1) = {13,15,12,10,8,6};
+Physical Line("load",2) = {11};
+Physical Line("level",3) = {19,16};
+Physical Line("far",5) = {14};
+Physical Surface("soil1",1)={1};
+Transfinite Curve{8,18,12,10,17,6,16,19} = 25 ;
+Transfinite Curve{19} = 60 Using Progression 0.98;
+Transfinite Curve{16} = 60 Using Progression 1/0.98;
+Transfinite Curve{11} = 50 ;
+Transfinite Curve {14} = 80 Using Bump 1.5;
+Transfinite Curve{15,13} = 20 ;
 Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 """
@@ -139,32 +144,31 @@ else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
     filed.write(test_geo)
-#os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
+#
 if flag == 'W':
-    msh = meshio.read("%s.mesh/%s.msh"%(nombre,nombre))
-    triangle_mesh = create_mesh(msh, "triangle", True)
-    line_mesh = create_mesh(msh, "line", True)
-    meshio.write("%s.mesh/%s_mesh.xdmf"%(nombre,nombre),triangle_mesh)
-    meshio.write("%s.mesh/%s_facets.xdmf"%(nombre,nombre), line_mesh)
+    os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
+    os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
+    exit()
+    #msh = meshio.read("%s.mesh/%s.msh"%(nombre,nombre))
+    #triangle_mesh = create_mesh(msh, "triangle", True)
+    #line_mesh = create_mesh(msh, "line", True)
+    #meshio.write("%s.mesh/%s_mesh.xdmf"%(nombre,nombre),triangle_mesh)
+    #meshio.write("%s.mesh/%s_facets.xdmf"%(nombre,nombre), line_mesh)
 elif flag == 'R':
-    mesh = Mesh()
-    mvc = MeshValueCollection("size_t", mesh, 2)
-    with XDMFFile("%s.mesh/%s_mesh.xdmf"%(nombre,nombre)) as infile:
-        infile.read(mesh)
-        infile.read(mvc)
-    subdominio = cpp.mesh.MeshFunctionSizet(mesh, mvc)
-
-    mvc = MeshValueCollection("size_t", mesh, 1)
-    with XDMFFile("%s.mesh/%s_facets.xdmf"%(nombre,nombre)) as infile:
-        infile.read(mvc)
-    contorno = cpp.mesh.MeshFunctionSizet(mesh, mvc)
-#%%%
-vtkfile_u = File('%s.results3/u.pvd' % (nombre))
-vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
-vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
-vtkfile_flow = File('%s.plastic/flow.pvd' % (nombre))
-ds =  Measure('ds', domain=mesh, subdomain_data=contorno)
-TS = TensorFunctionSpace(mesh, "CG", 1)
+    mesh=Mesh("%s.mesh/"%(nombre)+ nombre+".xml")
+    contorno = MeshFunction("size_t", mesh,"%s.mesh/"%(nombre)+nombre+"_facet_region.xml")
+    subd= MeshFunction("size_t",mesh,"%s.mesh/"%(nombre)+nombre+"_physical_region.xml")
+    vtkfile_u = File('%s.results/u.pvd' % (nombre))
+    vtkfile_fs = File('%s.results/Mohr-Coulomb_Fs.pvd' % (nombre))
+    vtkfile_p = File('%s.results/Pressure.pvd' % (nombre))
+    vtkfile_flow = File('%s.results/flow.pvd' % (nombre))
+    #%%%
+    vtkfile_u = File('%s.results3/u.pvd' % (nombre))
+    vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
+    vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
+    vtkfile_flow = File('%s.plastic/flow.pvd' % (nombre))
+    ds =  Measure('ds', domain=mesh, subdomain_data=contorno)
+    TS = TensorFunctionSpace(mesh, "CG", 1)
 
 # Function spaces will involve a standard CG space for the displacement whereas internal
 # state variables such as plastic strains will be represented using a **Quadrature** element.
@@ -211,15 +215,15 @@ u_ = TestFunction(V)
 # :math:`q_{lim}=\dfrac{2}{\sqrt{3}}\sigma_0\log\left(\dfrac{R_e}{R_i}\right)`
 # which is the analytical collapse load for a perfectly-plastic material (no hardening)::
 
-bc = [ DirichletBC(V, ((0,0)), contorno, 2)]#DirichletBC(V.sub(0), ((0)), contorno, 3),
+bc = [ DirichletBC(V.sub(0), ((0)), contorno, 1),DirichletBC(V, ((0,0)), contorno, 5)]#DirichletBC(V.sub(0), ((0)), contorno, 3),
 
 
 n = FacetNormal(mesh)
 #q_lim = float(2/sqrt(3)*ln(Re/Ri)*sig0)
-loading = Expression(('0','-k'),k=0,degree=2)
+loading = Expression(('0','k'),k=0,degree=2)
 
 def F_ext(v):
-    return inner(loading, v)*ds(1)
+    return inner(loading, v)*ds(2)
 
 # -----------------------------
 # Constitutive relation update
@@ -410,7 +414,7 @@ load_steps = np.linspace(0, 1, Nincr+1)[1:]
 results = np.array([[0,0]])
 for (i, t) in enumerate(load_steps):
 
-    loading.k = 250000*t
+    loading.k = -50000*t
     A, Res = assemble_system(a_Newton, res, bc)
     nRes0 = Res.norm("l2")
     nRes = nRes0
@@ -456,13 +460,6 @@ for (i, t) in enumerate(load_steps):
         fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
         p_avg.assign(project(p, P0))
         p_avg.rename("Plastic strain", "Plastic strain"); vtkfile_p << p_avg
-        results =np.append(results,np.array([[np.linalg.norm(u(0.0336/2,0.0773))/0.0773, 250000*t]]),axis=0)
-        print(results)
-        plt.plot(results[:, 0], results[:, 1], "-o")
-        plt.xlabel("Displacement ")
-        plt.ylabel("Morh-coulomb mean stress")
-        plt.savefig('plots/step_%s.png'%(i))
-        plt.close()
 # The load-displacement curve looks as follows:
 #
 # .. image:: cylinder_expansion_load_displ.png
