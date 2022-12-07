@@ -4,3 +4,5 @@
 *.h5
 *.xdmf
 *.results3
+*.vtu
+*.pvd
