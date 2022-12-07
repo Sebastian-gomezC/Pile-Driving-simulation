@@ -53,7 +53,7 @@ mesh = refine(mesh, cell_markers)
 
 cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
-class fine1(SubDomain):
+class fine1(SubDomain):$
         def inside(self, x, on_boundary):
             return  (x[0]<=5 and x[1]>-12) 
 fine1().mark(cell_markers, True)
