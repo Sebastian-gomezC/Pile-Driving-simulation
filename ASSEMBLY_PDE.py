@@ -26,12 +26,6 @@ from dolfin import cpp
 from ufl.tensors import as_matrix
 
 print('creando malla..')
-<<<<<<< HEAD
-geo_file_content= """
-SetFactory("OpenCASCADE");
-ancho = 30 ;
-prof =-50;
-=======
 def create_mesh(mesh, cell_type, prune_z=False):
         cells = mesh.get_cells_type(cell_type)
         cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
@@ -42,44 +36,12 @@ def create_mesh(mesh, cell_type, prune_z=False):
 geo_file_content= """SetFactory("OpenCASCADE");
 ancho = 30 ;
 prof =-10;
->>>>>>> origin/Test_geo
 soil1 = -4.7;
 soil2= -2.7;
 soil3= -11.1;
 soil4= -7.7;
 soil5= -23.8;
 Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-<<<<<<< HEAD
-
-
-Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
-
-Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
-
-Rectangle(4) = {0, soil1+soil2, 0, ancho, soil3, 0};
-
-Rectangle(5) = {0, soil1+soil2+soil3, 0, ancho, soil4, 0};
-
-Rectangle(6) = {0, soil1+soil2+soil3+soil4, 0, ancho, soil5, 0};
-
-BooleanFragments{ Surface{1}; Delete; }{ Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Delete; }
-Physical Curve("disp",1) = {1,5,8,11,14};
-Physical Curve("level",2) = {4};
-Physical Curve("far",5) = {3,7,10,13,15,16};
-Physical Surface("soil1",1)={2};
-Physical Surface("soil2",2)={3};
-Physical Surface("soil3",3)={4};
-Physical Surface("soil4",4)={5};
-Physical Surface("soil5",5)={6};
-Characteristic Length {4,3,6,8,10,12} = 3;
-Characteristic Length {2,1,5,7,9,11} = 0.1;
-Mesh 2 ;
-
-Mesh.MshFileVersion = 2.2;
-Save StrCat(StrPrefix(General.FileName), ".msh");
-"""
-
-=======
 //Rectangle(2) = {0, 0, 0, ancho, soil1, 0};
 
 //Rectangle(3) = {0, soil1, 0, ancho, soil2, 0};
@@ -121,7 +83,6 @@ Mesh.MshFileVersion = 2.2;
 Save StrCat(StrPrefix(General.FileName), ".msh");
 
 """
->>>>>>> origin/Test_geo
 nombre = 'pile_install'
 
 if os.path.exists("%s.mesh"%(nombre)):
@@ -130,15 +91,6 @@ else:
         os.mkdir("%s.mesh"%(nombre))
 with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
     filed.write(geo_file_content)
-<<<<<<< HEAD
-os.system('gmsh -2 {}.mesh/{}.geo -format msh2'.format(nombre,nombre))
-os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
-print('malla terminada')
-#definimos la malla apartirde los archivos xml
-mesh=Mesh("%s.mesh/"%(nombre)+ nombre+".xml")
-contorno = MeshFunction("size_t", mesh,"%s.mesh/"%(nombre)+nombre+"_facet_region.xml")
-subd= MeshFunction("size_t",mesh,"%s.mesh/"%(nombre)+nombre+"_physical_region.xml")
-=======
 os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
 
 #%%
@@ -164,7 +116,6 @@ with XDMFFile("%s.mesh/%s_facets.xdmf"%(nombre,nombre)) as infile:
 contorno = cpp.mesh.MeshFunctionSizet(mesh, mvc)
 
 #%%%
->>>>>>> origin/Test_geo
 vtkfile_u = File('%s.results3/u.pvd' % (nombre))
 vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
 vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
@@ -247,23 +198,12 @@ q, v = split(V)
 steps =10000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-<<<<<<< HEAD
-Ti=20 #tiempo total
-delta= (Ti-t)/steps
-=======
 Ti=5#tiempo total
 delta= Ti/steps
->>>>>>> origin/Test_geo
 dt=Constant((delta))
 #B_s=1E-11
 B_f=2.2E-9
 
-<<<<<<< HEAD
-E=K(subd,1729000,2717000,334000,1252000,3286000) #modulo elasticidad
-theta =K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
-C=K(subd,15530,10350,18650,18400,14000) #cohesion
-nu=Constant(0.2)#coeficiente de poisson  
-=======
 r=0.3
 Poro=0.05
 
@@ -279,7 +219,6 @@ B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
 gamma=(1-B_s/B_m) #biotcoef
 s_coef=(gamma-Poro)*B_s +Poro*B_f
->>>>>>> origin/Test_geo
 mu = E/2/(1+nu)#coeficientes de Lame
 rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
@@ -323,26 +262,6 @@ K1=Constant(((7E-10,0),(0,7E-10)))
 K2=Constant(((6.3E-9,0),(0,6.3E-9)))
 K3=Constant(((8E-8,0),(0,8E-8)))
 K4=Constant(((1E-6,0),(0,1E-6)))
-<<<<<<< HEAD
-K5=Constant(((1E-7,0),(0,1E-7)))
-K=Constant(((1E-7,0),(0,1E-7)))#KM(subd,K1,K2,K3,K4,K5)
-H=Expression(('0'),gam=gam,degree=1)
-bp=DirichletBC(W.sub(0),H,contorno,2)
-gamma=Constant((1))#biotcoef
-r=0.15
-bc1 = DirichletBC(W.sub(1), Constant((0, 0)),contorno,5)
-flo=Constant((0))
-s_coef=1.3*0.5E-9-(gamma-1.3)*0.3
-
-
-F1 = inner(sigma(u), epsilon(v))*dx \
-    - inner(f, v)*dx -\
-    inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)\
-    - gamma*p*nabla_div(v)*dx 
-    
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx -\
-    gamma*(nabla_div(u)-nabla_div(u_n))*q*dx+s_coef*(p-p_n)*q*dx - flo*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)
-=======
 K5=Constant(((8E-7,0),(0,8E-7)))
 K=KM(subd,K1,K2,K3,K4,K5)
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
@@ -352,7 +271,6 @@ bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
 bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,5)
 bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
->>>>>>> origin/Test_geo
 
 
 
@@ -380,14 +298,6 @@ R= R_mass +R_momentum
 X = Function(W)
 
 for pot in range(steps):
-<<<<<<< HEAD
-    if pot != 0:
-        p_n2, u_n2 = X.split(deepcopy=True)
-    #T=Expression(('0','x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? 1000: x[1]>=-I+r ? 1000 :0)'),I=t,r=r ,degree=2)
-    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r :0)'),I=t,r=r ,degree=1)
-    bc2 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-    bcs=[bc1,bc2,bp]
-=======
     if t<1:
         Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=t,r=r ,degree=1)
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
@@ -397,24 +307,10 @@ for pot in range(steps):
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
         bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
->>>>>>> origin/Test_geo
     A=assemble(L)
     b=assemble(R)
     [bc.apply(A) for bc in bcs]
     [bc.apply(b) for bc in bcs]
-<<<<<<< HEAD
-    X = Function(W)
-    solve(A, X.vector(), b,'lu')
-    #solve(L==R,X,bcs)
-
-    p_n, u_n = X.split(deepcopy=True)
-    u_=as_vector((X[1],X[0]))
-    u_=project(u_,Z_v)
-    p_=project(X[2],Z)
-    
-    if pot % 100== 0:
-        
-=======
     print('solver')
     solve(A, X.vector(), b)
     print('solver end')
@@ -424,7 +320,6 @@ for pot in range(steps):
     p_=project(p_n,Z)
     if pot % 100== 0:
         print('postproces')
->>>>>>> origin/Test_geo
         s = sigma(u_)
         
         cauchy=project(s,TS)

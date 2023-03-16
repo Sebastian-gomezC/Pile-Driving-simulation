@@ -34,20 +34,15 @@ def create_mesh(mesh, cell_type, prune_z=False):
         return out_mesh
 print('creando malla..')
 
-nombre = 'pilote_refinado_estructurado'
-
-
-   
-
-
+nombre = 'pilote_refinado_estructurado_escala_inpermeable'
 #%%
 
-mesh=RectangleMesh(Point(0.0, 0.0), Point(40,-40), 40, 40,"crossed")
+mesh=RectangleMesh(Point(0.0, 0.0), Point(0.3,-0.35), 30, 35,"crossed")
 cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
 class fine0(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[1]>-20) and (x[0]<20)
+            return  (x[1]>-0.20) 
 fine0().mark(cell_markers, True)
 mesh = refine(mesh, cell_markers)
 
@@ -55,7 +50,7 @@ cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
 class fine1(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[0]<=5 and x[1]>-12) 
+            return  (x[0]<=0.1 and x[1]>-0.15) 
 fine1().mark(cell_markers, True)
 mesh = refine(mesh, cell_markers)
 cell_markers2 =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -63,25 +58,25 @@ cell_markers2.set_all(False)
 
 class fine2(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[0]<=2 and x[1]>-11.5) 
+            return  (x[0]<=0.05 and x[1]>-0.1) 
 fine2().mark(cell_markers2, True)
 mesh = refine(mesh, cell_markers2)
 cell_markers3 =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers3.set_all(False)
 class fine3(SubDomain):
         def inside(self, x, on_boundary):
-            return (x[0]<=0.5 and x[1]>-10) 
+            return (x[0]<=0.02 and x[1]>-0.08) 
 fine3().mark(cell_markers3, True)
 mesh = refine(mesh, cell_markers3)
 
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
-tol=1E-6
+tol=1E-9
 class disp(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and abs(x[0])< tol 
 class under(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1]+40)< tol 
+            return on_boundary and abs(x[1]+0.35)< tol 
 class level(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and (abs(x[1])< tol) 
@@ -92,20 +87,7 @@ far().mark(contorno, 5)
 under().mark(contorno, 3)
 level().mark(contorno, 2)
 disp().mark(contorno, 1)
-subdominio = MeshFunction("size_t", mesh, mesh.topology().dim())
-tol=1E-2
-class S1(SubDomain):
-        def inside(self, x, on_boundary):
-            return  (x[1])>= -3 
-class S2(SubDomain):
-        def inside(self, x, on_boundary):
-            return  ((x[1])<=-3) and ((x[1])>=(-8)) 
-class S3(SubDomain):
-        def inside(self, x, on_boundary):
-            return (x[1])<=(-8)
-S2().mark(subdominio, 2)
-S1().mark(subdominio, 1)
-S3().mark(subdominio, 3)
+tol=1E-6
 vtkfile_u = XDMFFile("%s.results/velocity.xdmf" % (nombre))
 vtkfile_fs = XDMFFile("%s.results/Mohr-Coulomb_Fs.xdmf" % (nombre))
 vtkfile_p = XDMFFile("%s.results/Pressure.xdmf" % (nombre))
@@ -120,6 +102,9 @@ vtkfile_u.parameters["rewrite_function_mesh"] = False
 vtkfile_fs.parameters["rewrite_function_mesh"] = False
 vtkfile_p.parameters["rewrite_function_mesh"] = False
 vtkfile_flow.parameters["rewrite_function_mesh"] = False
+
+#material 
+
     
 class K(UserExpression):
     def __init__(self, subdominio, k_0, k_1,k_2, **kwargs):
@@ -155,7 +140,8 @@ class KM(UserExpression):
             values = self.k_1
         else:
             values=self.k_2
-
+            
+        
 #deformacion
 def epsilon(u):
     return 0.5*(nabla_grad(u) + nabla_grad(u).T)
@@ -171,27 +157,30 @@ U = TrialFunction(W)
 V = TestFunction(W)
 Z= FunctionSpace(mesh, 'P', 1)
 Z_v = VectorFunctionSpace(mesh, 'P', 1)
-TS = TensorFunctionSpace(mesh, "DG", 0)
+TS = TensorFunctionSpace(mesh, "P", 1)
+vtkfile_sudint= File('%s.results/subd.pvd' % (nombre))
+
+contorno.rename("Suelos", "Suelos"); vtkfile_sudint << contorno
 
 p, u = split(U)
 q, v = split(V)
-steps =760*2
+steps= 120*15
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
-Ti=760#tiempo total
+Ti=120#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
 # B_m=1E-10
 B_f=2.2E-9
-r=0.4
-Poro=0.5
+r=0.005
+Poro=0.05
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-E=K(subdominio,20000000,80000000,20000000)# #modulo elasticidad15000000
+E=20000000# #modulo elasticidad
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
-alpha=1 #(1-B_s/B_m) #biotcoef
+alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
@@ -216,8 +205,6 @@ def h(p):
 
 #theta=s/(1-s)
 gam =Constant((9806.65))
-
-
 def envFalla(O1,O3,Theta,c):#envolvente de falla experimental
     ang=Theta#angulo de friccion interno 
     c=c#cohesión
@@ -232,23 +219,12 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
 visco=1E-3
-K1=Constant(((1E-11/visco,0),(0,1E-11/visco)))
-K2=Constant(((1E-9/visco,0),(0,1E-9/visco)))
-K3=Constant(((1E-11/visco,0),(0,1E-11/visco)))
-
-
-kappa=K(subdominio,5E-11/visco,1E-9/visco,5E-11/visco)#KM(subdominio,K1,K1,K1)#K1#
-
-vtkfile_sudint= File('%s.results/subd.pvd' % (nombre))
-
-vtkfile_sudint << subdominio
+kappa=Constant(((1.48059E-09,0),(0,1.48059E-09)))
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
-bp2=DirichletBC(W.sub(0),Constant((0)),contorno,5)
-
 bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,5)
-bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
+bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,3)
 
 
 x_n=Expression(('0','0','0'), gam=gam,degree=3)
@@ -287,12 +263,15 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
-T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=t,degree=2)
+T=Expression(('0','x[1] <-I  ? 0 :  -I '),I=t,r=r ,degree=2)
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
 F2 = dt*inner(nabla_grad(q), kappa*nabla_grad(p))*dx \
-    + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx
+    + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
+    -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)\
+    -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=3,domain=mesh, subdomain_data=contorno)\
+    -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno) 
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -304,13 +283,9 @@ X = Function(W)
 I=0
 v=0
 for pot in range(steps):
-    I=(v)*(delta)+I
-    T.I=I
-    if I>=5 and I<8:
-        v=3.5/(2*60 +15)
-    else:
-        v=2.5/(5*60)
-    if I<9:
+    I+=v*delta
+    if t < 8:
+        v=0.00125
         Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
         residual = action(L, X)-R
         v_reac = Function(W)
@@ -320,32 +295,57 @@ for pot in range(steps):
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
         if t==0:
-            T.Rf=0
+            T.I=0
         else :
-            T.Rf=0
-            #T.Rf=0.05*assemble(action(residual, v_reac))/I
+            T.I=0.01*assemble(action(residual, v_reac))/I
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        bcs=[bc1,bc2,bc3,bp1,bp2]
-    else:
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=9,r=r ,degree=1)
+        bcs=[bc1,bc2,bc3,bp1]
+    elif t>=8 and t<10:
+        v=0
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
         residual = action(L, X)-R
         v_reac = Function(W)
         #apoyo izq:
-        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=9,r=r ,degree=1),contorno, 1)  
+        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
+
+        bc_Rx_i.apply(v_reac.vector())
+        print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
+        T.I=0.01*assemble(action(residual, v_reac))/I
+        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        bcs=[bc1,bc2,bc3,bp1]
+    elif t>10 and t<120:
+        v=6E-4
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
+        residual = action(L, X)-R
+        v_reac = Function(W)
+        #apoyo izq:
+        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
 
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        T.Rf=0
-        #T.Rf=0.05*assemble(action(residual, v_reac))/9
-        bcs=[bc1,bc2,bc3,bp1,bp2]
+        T.I=0.05*assemble(action(residual, v_reac))/9
+        bcs=[bc1,bc2,bc3,bp1]
+    else:
+        v=0
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
+        residual = action(L, X)-R
+        v_reac = Function(W)
+        #apoyo izq:
+        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
+
+        bc_Rx_i.apply(v_reac.vector())
+        print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
+        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+        T.I=0.05*assemble(action(residual, v_reac))/9
+        bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
     A=assemble(L)
     b=assemble(R)
     [bc.apply(A) for bc in bcs]
     [bc.apply(b) for bc in bcs]
     print('solver')
-    solve(A, X.vector(), b)
+    solve(A, X.vector(), b,'lu')
     print('solver end')
     X_nnn.assign(X_nn)
     p_nnn, u_nnn = split(X_nnn)
@@ -355,7 +355,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 1== 0:
+    if pot % 10== 0:
         print('postproces')
         s = sigma(u_)
         

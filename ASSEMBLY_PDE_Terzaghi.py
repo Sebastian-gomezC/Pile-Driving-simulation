@@ -133,7 +133,7 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 
 p, u = split(U)
 q, v = split(V)
-steps =500
+steps =5000
 n=FacetNormal(mesh)#vector normal 
 t=0 # tiempo inicial
 Ti=0.01#tiempo total
@@ -354,8 +354,8 @@ for pot in range(steps):
         
         
         line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='FEM',)
-        plt.xlabel("$P*$ ")
-        plt.ylabel("$z*$")
+        plt.xlabel("$P*$ ",fontsize=20)
+        plt.ylabel("$z*$",fontsize=20)
         line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='Analítica')
         
         lines = plt.gca().get_lines()
@@ -364,8 +364,8 @@ for pot in range(steps):
         if near(t,0.01/(cv/1**2),dt/2) :
             ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
             
-        plt.ylim((0,1.02))
-        plt.xlim((0,1.02))
+        plt.ylim((0,1.05))
+        plt.xlim((0,1.05))
         print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
         
         
@@ -375,7 +375,7 @@ for pot in range(steps):
     if near(t,2/(cv/1**2),dt/2):
         break
     t=t+delta
-plt.savefig('resultados/consolidacion_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
 ig, ax = plt.subplots()
 uplot=np.array(uplot)
@@ -383,15 +383,15 @@ line1, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
 line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
 ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
 ax.set_xscale('log')
-plt.xlabel("$t*$ ")
-plt.ylabel("$u*_{z}$")
+plt.xlabel("$t*$ ",fontsize=20)
+plt.ylabel("$u*_{z}$",fontsize=20)
 plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('resultados/disp_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.savefig('resultados/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
 plt.close()
 
 L2=np.array(L2)
 plt.semilogy(L2[:,1],L2[:,0])
-plt.savefig('resultados/L2norm_dt%s_fine_%s.png'%(round(dtdot,5),scheme),dpi=300)
-np.savetxt('resultados/L2norm_dt%s_fine_%s.out'%(round(dtdot,5),scheme), (L2)) 
+plt.savefig('resultados/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+np.savetxt('resultados/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (L2)) 
 plt.close()
 
