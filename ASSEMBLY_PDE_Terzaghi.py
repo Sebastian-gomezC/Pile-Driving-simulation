@@ -25,7 +25,7 @@ import mshr
 from label_lines import *
 flag ="R"
 parameters['allow_extrapolation'] = True
-nombre = 'Terzaghi_low'
+nombre = 'Terzaghi_multi'
 def create_mesh(mesh, cell_type, prune_z=False):
         cells = mesh.get_cells_type(cell_type)
         cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
@@ -35,6 +35,7 @@ def create_mesh(mesh, cell_type, prune_z=False):
         return out_mesh
 print('creando malla..')
 mesh=RectangleMesh(Point(-0.25, 0.0), Point(0.25,-1), 10, 20,"crossed")
+h1=0.1
 #geo = mshr.Rectangle(Point(-0.25, 0.0), Point(0.25,-1))
 #mesh = mshr.generate_mesh(geo,25)
 # cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -60,6 +61,19 @@ load().mark(contorno, 2)
 bound().mark(contorno, 5)
 walls().mark(contorno, 1)
 
+subd = MeshFunction("size_t", mesh, mesh.topology().dim())
+
+class H1(SubDomain):
+    def inside(self,x,on_boundary):
+        return x[1]> h1 
+class H2(SubDomain):
+    def inside(self,x,on_boundary):
+        return x[1]<h1
+H1.mark(subd,1)
+H2.mark(subd,2)
+vtkfile_sub = File('%s.results3/subd.pvd' % (nombre))
+subd.rename("subdomain", "subdomain") ;vtkfile_sub << subd
+# archivos de salida 
 vtkfile_u = File('%s.results3/u.pvd' % (nombre))
 vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
 vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
@@ -133,8 +147,8 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 
 p, u = split(U)
 q, v = split(V)
-steps =5000
-n=FacetNormal(mesh)#vector normal 
+steps =1
+
 t=0 # tiempo inicial
 Ti=0.01#tiempo total
 delta= Ti/steps
@@ -142,7 +156,6 @@ dt=Constant((delta))
 # B_s=1E-11
 # B_m=1E-10
 B_f=4.4E-10
-
 Poro=0.3
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
@@ -157,7 +170,6 @@ C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
 # E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 print('modulo elasticidad ',E)
 mu = E/(2*(1+nu))#coeficientes de Lame
-rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 
@@ -165,15 +177,7 @@ lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 d = u.geometric_dimension()
 f = Constant((0, 0))
-lam=Constant((0))
-def h(p):
-    x=SpatialCoordinate(mesh)
-    gam =Constant((9806.65))
-    g=Constant((0,-1))
-    return p/gam - x[1]
 
-#theta=s/(1-s)
-gam =Constant((9806.65))
 
 
 def envFalla(O1,O3,Theta,c):#envolvente de falla experimental
@@ -189,11 +193,11 @@ def sigma_3(T):
     c=det(T)
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
-      
+
+n=FacetNormal(mesh)#vector normal      
 kappa=5E-9
 k=kappa/8.9E-4
 K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
-H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
@@ -203,7 +207,7 @@ bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,5)
 
 
 
-x_n=Expression(('0','0','0'), gam=gam,degree=3)
+x_n=Expression(('0','0','0'),degree=3)
 X_n = Function(W)
 X_n=interpolate(x_n, W)
 p_n, u_n = split(X_n)
@@ -316,6 +320,8 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
+
+    # post proceso 
     if pot==0:
         u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*5e7
         p_0=5E7#p_(0.00,-0.1)
@@ -334,7 +340,7 @@ for pot in range(steps):
         fs=project(fs,Z)
         flow=-K*grad(p_)
         flow=project(flow,Z_v)
-        fs.rename(" mean stress", "mean stress") ;vtkfile_fs << fs
+        fs.rename("mean stress", "mean stress") ;vtkfile_fs << fs
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
@@ -374,7 +380,7 @@ for pot in range(steps):
         print('p min:', p_.vector().get_local().min())
     if near(t,2/(cv/1**2),dt/2):
         break
-    t=t+delta
+    t += delta
 plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
 ig, ax = plt.subplots()
