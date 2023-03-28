@@ -1,5 +1,6 @@
 *.ROM
 *.results
+*.results3
 *.mesh
 *.h5
 *.xdmf
