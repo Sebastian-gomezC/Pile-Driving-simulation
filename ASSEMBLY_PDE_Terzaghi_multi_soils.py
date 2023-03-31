@@ -230,7 +230,7 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-5E3))
+T=Constant((0,-5E7))
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
