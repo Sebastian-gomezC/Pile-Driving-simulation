@@ -34,8 +34,10 @@ def create_mesh(mesh, cell_type, prune_z=False):
             out_mesh.prune_z_0()
         return out_mesh
 print('creando malla..')
-mesh=RectangleMesh(Point(-0.25, 0.0), Point(0.25,-1), 10, 20,"crossed")
-h1=-0.1
+L=-3
+H=1.5
+mesh=RectangleMesh(Point(-H/2, 0.0), Point(H/2,L), int(H*10), int(-L*20),"crossed")
+h1=-1
 #geo = mshr.Rectangle(Point(-0.25, 0.0), Point(0.25,-1))
 #mesh = mshr.generate_mesh(geo,25)
 # cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -53,10 +55,10 @@ class load(SubDomain):
             return on_boundary and abs(x[1])< tol 
 class bound(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1]+1)< tol 
+            return on_boundary and abs(x[1]-L)< tol 
 class walls(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and ((abs(x[0]+0.25)< tol) or (abs(x[0]-0.25)< tol) )
+            return on_boundary and ((abs(x[0]+H/2)< tol) or (abs(x[0]-H/2)< tol) )
 load().mark(contorno, 2)
 bound().mark(contorno, 5)
 walls().mark(contorno, 1)
@@ -64,7 +66,7 @@ walls().mark(contorno, 1)
 subd = MeshFunction("size_t", mesh, mesh.topology().dim())
 class H1(SubDomain):
     def inside(self,x,on_boundary):
-        return x[0]>= h1 
+        return x[1]>=h1 
 class H2(SubDomain):
     def inside(self,x,on_boundary):
         return (x[1]-h1)<tol
@@ -83,47 +85,30 @@ vtkfile_flow = File('%s.results3/flow.pvd' % (nombre))
 
     
 class K(UserExpression):
-    def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
+    def __init__(self, subdominio, k_0, k_1, **kwargs):
         super().__init__(**kwargs)
         self.subdominio = subdominio
         self.k_0 = k_0
         self.k_1 = k_1
-        self.k_2 = k_2
-        self.k_3 = k_3
-        self.k_4 = k_4
 
     def eval_cell(self, values, x, cell):
         if self.subdominio[cell.index] == 1:
             values[0] = self.k_0
         elif self.subdominio[cell.index] == 2:
             values[0] = self.k_1
-        elif self.subdominio[cell.index] == 3:
-            values[0] = self.k_2
-        elif self.subdominio[cell.index] == 4:
-            values[0] = self.k_3
-        else:
-            values[0]=self.k_4
 class KM(UserExpression):
-    def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
+    def __init__(self, subdominio, k_0, k_1, **kwargs):
         super().__init__(**kwargs)
         self.subdominio = subdominio
         self.k_0 = k_0
         self.k_1 = k_1
-        self.k_2 = k_2
-        self.k_3 = k_3
-        self.k_4 = k_4
 
     def eval_cell(self, values, x, cell):
         if self.subdominio[cell.index] == 1:
             values = self.k_0
         elif self.subdominio[cell.index] == 2:
             values = self.k_1
-        elif self.subdominio[cell.index] == 3:
-            values = self.k_2
-        elif self.subdominio[cell.index] == 4:
-            values = self.k_3
-        else:
-            values =self.k_4
+
 #deformacion
 def epsilon(u):
     return 0.5*(nabla_grad(u) + nabla_grad(u).T)
@@ -145,27 +130,27 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 
 p, u = split(U)
 q, v = split(V)
-steps =1
+steps =1000
 
 t=0 # tiempo inicial
-Ti=0.01#tiempo total
+Ti=10#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
-# B_m=1E-10
-B_f=4.4E-10
+B_m=0.1E-5 #compresibilidad modulo bulk moduls
+B_f=4.4E-5
 Poro=0.3
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-E=50000000# #modulo elasticidad
-B_m=(E/(3*(1-2*nu)))**(-1)
+#E=50000000# #modulo elasticidad
+#B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
 alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
 
-# E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
+E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 print('modulo elasticidad ',E)
 mu = E/(2*(1+nu))#coeficientes de Lame
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
@@ -193,9 +178,10 @@ def sigma_3(T):
     return -b/2 - sqrt(b**2-4*c)/2
 
 n=FacetNormal(mesh)#vector normal      
-kappa=5E-9
-k=kappa/8.9E-4
-K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
+k=1.15E-5
+k1=Constant(((1.15E-5,0),(0,1.15E-5)))
+k2=Constant(((1.15E-6,0),(0,1.15E-6)))
+K=KM(subd,k1,k2)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
@@ -223,7 +209,7 @@ p_nnn, u_nnn = split(X_nnn)
 #pconst= [11/6,-3,3/2,-1/3] #bdf 3
 pconst=[1,-1,0,0] #bdf1
 types=['BDF1','BDF2','BDF2op','BDF3']
-scheme=types[0]
+scheme=types[3]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
@@ -244,7 +230,7 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-5E7))
+T=Constant((0,-5E3))
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
@@ -346,7 +332,7 @@ for pot in range(steps):
     print(tdot)
     z_=0
     for k in range(snaps):
-        pdot=p_(0.0,z_*1)/p0
+        pdot=p_(0.0,z_*3)/p0
         if k ==0:
             results=np.array([[pdot,-z_]])
         else:
@@ -371,15 +357,16 @@ for pot in range(steps):
         plt.ylim((0,1.05))
         plt.xlim((0,1.05))
         print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
-        
-        
         print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
         print('p max:', p_.vector().get_local().max())
         print('p min:', p_.vector().get_local().min())
+        
+        
     if near(t,2/(cv/1**2),dt/2):
         break
+    
     t += delta
-plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.savefig('resultados_%s/consolidacion_dt%s_grosse_%s.png'%(nombre,round(dtdot,5),scheme),dpi=300)
 plt.close()
 ig, ax = plt.subplots()
 uplot=np.array(uplot)
@@ -390,12 +377,12 @@ ax.set_xscale('log')
 plt.xlabel("$t*$ ",fontsize=20)
 plt.ylabel("$u*_{z}$",fontsize=20)
 plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('resultados/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
+plt.savefig('resultados_%s/disp_dt%s_grosse_%s.png'%(nombre,round(dtdot,5),scheme),dpi=300,)
 plt.close()
 
 L2=np.array(L2)
 plt.semilogy(L2[:,1],L2[:,0])
-plt.savefig('resultados/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-np.savetxt('resultados/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (L2)) 
+plt.savefig('resultados_%s/L2norm_dt%s_grosse_%s.png'%(nombre,round(dtdot,5),scheme),dpi=300)
+np.savetxt('resultados_%s/L2norm_dt%s_grosse_%s.out'%(nombre,round(dtdot,5),scheme), (L2)) 
 plt.close()
 
