@@ -137,7 +137,7 @@ Ti=10#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
-B_m=0.1E-5 #compresibilidad modulo bulk moduls
+B_m=0.004E-5 #compresibilidad modulo bulk moduls
 B_f=4.4E-5
 Poro=0.3
 nu=0.3#coeficiente de poisson  
@@ -181,7 +181,7 @@ n=FacetNormal(mesh)#vector normal
 k=1.15E-5
 k1=Constant(((1.15E-5,0),(0,1.15E-5)))
 k2=Constant(((1.15E-6,0),(0,1.15E-6)))
-K=KM(subd,k1,k2)
+K=K(subd,1.15E-5,1.15E-6)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
@@ -206,8 +206,8 @@ p_nnn, u_nnn = split(X_nnn)
 #
 #pconst=[3./2,-2,1./2,0.0] #bdf2
 #pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
-#pconst= [11/6,-3,3/2,-1/3] #bdf 3
-pconst=[1,-1,0,0] #bdf1
+pconst= [11/6,-3,3/2,-1/3] #bdf 3
+#pconst=[1,-1,0,0] #bdf1
 types=['BDF1','BDF2','BDF2op','BDF3']
 scheme=types[3]
 du=pconst[0]*u
@@ -230,7 +230,8 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-5E7))
+Po=5E4
+T=Constant((0,-Po))
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
@@ -246,7 +247,7 @@ R=R_momentum+R_mass
 snaps=100
 mv=1/((1/B_m)+((4/3)*mu))
 cv=k/(alpha**2*mv+s_coef)
-p0= ((alpha*mv)/(alpha**2*mv+s_coef))*5E7
+p0= ((alpha*mv)/(alpha**2*mv+s_coef))*Po
 def p_analitico(time,snaps,cv,p0):
     z=0
     for n in range(snaps):
@@ -266,7 +267,7 @@ def p_analitico(time,snaps,cv,p0):
         z=z+1/snaps
     return a
 def u_analitico(time,snaps,cv,p0):
-    c=-mv*5e7*1
+    c=-mv*Po*1
     for i in range(100):
             if i==0:
                 p=0
@@ -284,7 +285,7 @@ f.set_figwidth(10)
 f.set_figheight(10)
 L2=[]
 uplot=[]
-u_f=mv*5E7
+u_f=mv*Po
 print('u final',u_f)
 ig, ax = plt.subplots()
 dtdot=(cv/1**2)*delta
@@ -307,8 +308,8 @@ for pot in range(steps):
 
     # post proceso 
     if pot==0:
-        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*5e7
-        p_0=5E7#p_(0.00,-0.1)
+        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*Po
+        p_0=Po#p_(0.00,-0.1)
     tdot=(cv/1**2)*t
     if pot%(steps/50) ==0:
         s = sigma(u_)
@@ -337,7 +338,7 @@ for pot in range(steps):
             results=np.array([[pdot,-z_]])
         else:
             results =np.append(results,np.array([[pdot,-z_]]),axis=0)
-        z_=z_- 1/snaps
+        z_-= 1/snaps
     p_a = p_analitico(t,snaps,cv,p0)
     L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
     if near(t,0.01/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2):
