@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 types=['BDF1','BDF2','BDF3']
-dtdot=0.00083
+dtdot=0.00101
 L=[]
 for scheme in types:
-    L.append(np.loadtxt('resultados/L2norm_dt%s_grosse_%s.out'%(dtdot,scheme)))
+    L.append(np.loadtxt('resultados_Terzaghi_multi/L2norm_dt%s_grosse_%s.out'%(dtdot,scheme)))
     
 ig, ax = plt.subplots()
 for i in range(len(L)):

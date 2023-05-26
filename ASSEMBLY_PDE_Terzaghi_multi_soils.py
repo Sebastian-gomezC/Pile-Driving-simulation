@@ -215,12 +215,12 @@ X_nnn=Function(W)
 X_nnn=interpolate(x_n, W)
 p_nnn, u_nnn = split(X_nnn)
 #
-#pconst=[3./2,-2,1./2,0.0] #bdf2
+pconst=[3./2,-2,1./2,0.0] #bdf2
 #pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
-pconst= [11/6,-3,3/2,-1/3] #bdf 3
+#pconst= [11/6,-3,3/2,-1/3] #bdf 3
 #pconst=[1,-1,0,0] #bdf1
 types=['BDF1','BDF2','BDF2op','BDF3']
-scheme=types[3]
+scheme=types[1]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
@@ -255,7 +255,7 @@ L_mass=lhs(F2)
 R_mass=rhs(F2)
 L=L_momentum+L_mass
 R=R_momentum+R_mass
-snaps=100
+snaps=500
 
 
 
@@ -377,7 +377,7 @@ f.set_figheight(10)
 L2=[]
 uplot=[]
 ig, ax = plt.subplots()
-dtdot=(cv/1**2)*delta
+dtdot=(cv/h2**2)*delta
 for pot in range(steps):
     
     #A=assemble(L)
@@ -399,7 +399,7 @@ for pot in range(steps):
     if pot==0:
         u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*Po
         p_0=Po#p_(0.00,-0.1)
-    tdot=(cv/1**2)*t
+    tdot=(cv/h2**2)*t
     if pot%(steps/50) ==0:
         s = sigma(u_)
         cauchy=project(s,TS)
@@ -456,9 +456,11 @@ for pot in range(steps):
     t += delta
 plt.savefig('resultados_%s/consolidacion_dt%s_grosse_%s.png'%(nombre,round(dtdot,5),scheme),dpi=300)
 plt.close()
-
+plt.grid(True, which="both", axis='both')
 L2=np.array(L2)
 plt.semilogy(L2[:,1],L2[:,0])
+plt.xlabel("t*")
+plt.ylabel("L^2")
 plt.savefig('resultados_%s/L2norm_dt%s_grosse_%s.png'%(nombre,round(dtdot,5),scheme),dpi=300)
 np.savetxt('resultados_%s/L2norm_dt%s_grosse_%s.out'%(nombre,round(dtdot,5),scheme), (L2)) 
 plt.close()
