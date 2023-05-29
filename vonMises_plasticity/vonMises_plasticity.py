@@ -87,9 +87,30 @@ nu = Constant(0.3)
 lmbda = E*nu/(1+nu)/(1-2*nu)
 mu = E/2./(1+nu)
 sig0 = Constant(10000)  # yield strength
-Et = 279000 # tangent modulus
+Et = 1000 # tangent modulus
 H = E*Et/(E-Et)  # hardening modulus
-
+test_geo="""SetFactory("OpenCASCADE");
+ancho = 5;
+prof =3;
+Rectangle(1) = {0, 0, 0, ancho, prof, 0};
+Rectangle(2) = {0, prof, 0,ancho/2-0.3, -0.1, 0};
+Rectangle(3) = {ancho/2+0.3, prof, 0,ancho/2-0.3, -0.1, 0};
+BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
+Rectangle(4) = {ancho/2-0.3,prof,0,0.6,-0.1,0};
+BooleanDifference{ Surface{1}; Delete; }{ Surface{4}; Delete; }
+Physical Line("disp",1) = {6,4};
+Physical Line("load",2) = {2};
+//Physical Line("level",3) = {1,5,6};
+Physical Line("far",5) = {5};
+Physical Surface("soil",1)={1};
+Transfinite Curve {2} = 80 ;
+Transfinite Curve {4} = 40 Using Progression 0.98 ;
+Transfinite Curve {6} = 40 Using Progression 1.02 ;
+Transfinite Curve {5} = 20;
+Transfinite Curve {1,3} = 60;
+Mesh 2 ;
+Mesh.MshFileVersion = 2.2;
+"""
 test_geo="""SetFactory("OpenCASCADE");
 ancho = 10;
 prof =-3;
@@ -97,45 +118,22 @@ Rectangle(1) = {0, 0, 0, ancho, prof, 0};
 Rectangle(2) = {ancho/2-0.2, 0, 0,0.4, -0.4, 0};
 Rectangle(3) = {ancho/2-0.5, -0.4, 0,1, -0.2, 0};
 BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
-
-
-Physical Line("disp",1) = {13,15,12,10,8,6};
-Physical Line("load",2) = {11};
-Physical Line("level",3) = {19,16};
-Physical Line("far",5) = {14};
+Physical Line("disp",1) = {9,11,10,5,7,6};
+Physical Line("load",2) = {8};
+Physical Line("level",3) = {12,4};
+Physical Line("far",5) = {2};
 Physical Surface("soil1",1)={1};
-Transfinite Curve{8,18,12,10,17,6,16,19} = 25 ;
-Transfinite Curve{19} = 60 Using Progression 0.98;
-Transfinite Curve{16} = 60 Using Progression 1/0.98;
-Transfinite Curve{11} = 50 ;
-Transfinite Curve {14} = 80 Using Bump 1.5;
-Transfinite Curve{15,13} = 20 ;
+Transfinite Curve{9,11,10,5,7,6} = 25 ;
+Transfinite Curve{12} = 60 Using Progression 0.98;
+Transfinite Curve{4} = 60 Using Progression 1/0.98;
+Transfinite Curve{8} = 50 ;
+Transfinite Curve {2} = 80 Using Bump 1.5;
+Transfinite Curve{1,3} = 10 ;
 Mesh 2 ;
 Mesh.MshFileVersion = 2.2;
 """
 
-# """SetFactory("OpenCASCADE");
-# ancho = 5;
-# prof =3;
-# Rectangle(1) = {0, 0, 0, ancho, prof, 0};
-# Rectangle(2) = {0, prof, 0,ancho/2-0.3, -0.1, 0};
-# Rectangle(3) = {ancho/2+0.3, prof, 0,ancho/2-0.3, -0.1, 0};
-# BooleanDifference{ Surface{1}; Delete; }{ Surface{3}; Surface{2}; Delete; }
-# Rectangle(4) = {ancho/2-0.3,prof,0,0.6,-0.1,0};
-# BooleanDifference{ Surface{1}; Delete; }{ Surface{4}; Delete; }
-# Physical Line("disp",1) = {6,4};
-# Physical Line("load",2) = {2};
-# //Physical Line("level",3) = {1,5,6};
-# Physical Line("far",5) = {5};
-# Physical Surface("soil",1)={1};
-# Transfinite Curve {2} = 80 ;
-# Transfinite Curve {4} = 40 Using Progression 0.98 ;
-# Transfinite Curve {6} = 40 Using Progression 1.02 ;
-# Transfinite Curve {5} = 20;
-# Transfinite Curve {1,3} = 60;
-# Mesh 2 ;
-# Mesh.MshFileVersion = 2.2;
-# """
+
 nombre = 'plastic'
 flag = sys.argv[1]
 if os.path.exists("%s.mesh"%(nombre)):
@@ -146,7 +144,7 @@ with open("%s.mesh/%s.geo"%(nombre,nombre), 'w') as filed:
     filed.write(test_geo)
 #
 if flag == 'W':
-    os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
+    #os.system('gmsh -2 %s.mesh/%s.geo -format msh2'%(nombre,nombre))
     os.system('dolfin-convert -i gmsh {}.mesh/{}.msh {}.mesh/{}.xml'.format(nombre, nombre,nombre,nombre))
     exit()
     #msh = meshio.read("%s.mesh/%s.msh"%(nombre,nombre))
@@ -409,8 +407,8 @@ def epsilon(u):
 def sigma_plane(u):
     return lmbda*div(u)*Identity(2) + 2*mu*epsilon(u)
 Nitermax, tol = 10, 1e-8  # parameters of the Newton-Raphson procedure
-Nincr = 1000
-load_steps = np.linspace(0, 1, Nincr+1)[1:]
+Nincr = 200
+load_steps = np.linspace(0, 0.8, Nincr+1)[1:]
 results = np.array([[0,0]])
 for (i, t) in enumerate(load_steps):
 
@@ -446,7 +444,7 @@ for (i, t) in enumerate(load_steps):
 # at each time increment, the plastic strain must first be projected onto the
 # previously defined DG FunctionSpace. We also monitor the value of the cylinder
 # displacement on the inner boundary. The load-displacement curve is then plotted::
-    if i % 10 ==0:
+    if i % 2 ==0:
         u.rename("displacement", "displacement") ;vtkfile_u << u
         s = sigma_plane(u)
         cauchy=project(s,TS)
