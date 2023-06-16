@@ -15,10 +15,11 @@ q = 10
 M=10
 alpha=1
 r = np.linspace(0.01, R, steps)
+mv=0.005
+u_f=mv*5E7
 def pbar(r,s,f_const):
+    ro = r/R
     sigma = (s * R ** 2) / cv
-    ro = r / R
-      # Crear un arreglo para almacenar los resultados este se inicializa en cero, es como crear una lista pero array
     I_cero_ro = besseli(0, ro * (sigma) ** (1 / 2))
     K_cero_ro = besselk(0, ro * (sigma) ** (1 / 2))
     I_cero = besseli(0, (sigma) ** (1 / 2))
@@ -28,11 +29,24 @@ def pbar(r,s,f_const):
     term_3 = (K_cero / I_cero) * I_cero_ro
     v_ray = (term_1 - term_2 - term_3)
     return v_ray
+
 def f_coef(r,s,f_const):
     sigma = (s * R ** 2) / cv
     part_1 = (2*alpha/sigma**2)*(1-1/(besseli(0,np.sqrt(sigma))))
     part_2 = 3*K/G + alpha*Betta*(1-(2*besseli(1,np.sqrt(sigma)))/(np.sqrt(sigma)*besseli(0,np.sqrt(sigma))))
     return (part_1/part_2)*q/G
+
+def rad_displacement(s,f_const,r):
+    ro = r/R
+    sigma=(s * R ** 2) / cv
+    I_uno_ro = besseli(1, ro * (sigma) ** (1 / 2))
+    K_uno_ro = besselk(1, ro * (sigma) ** (1 / 2))
+    I_cero = besseli(0, (sigma) ** (1 / 2))
+    K_cero = besselk(0, (sigma) ** (1 / 2))
+    part_1 = ((alpha*Betta*((ro/4)-I_uno_ro/(2*sigma ** (1/2)*I_cero)))-(ro/4)*((k/G)+4/3))*(G*f_const/q)
+    part_2 = (alpha/2*sigma*sigma**(1/2))*(K_uno_ro - (1/ro*sigma ** (1/2) + (K_cero/I_cero))*I_uno_ro)
+    n_ray = part_1 + part_2
+    return n_ray
 
 def talbot(M, t,Fun,r=0,f_const=0):
     v=0
@@ -49,7 +63,8 @@ def talbot(M, t,Fun,r=0,f_const=0):
         v += termino.real
     v_final=((2) / (5 * t)) * v
     return v_final
-def analitical(r, R, G, q, cv,M,t):
+
+def analitical(r,M,t):
     v_final = []
     f_const = talbot(M, t, f_coef)
     print(f_const)
@@ -58,6 +73,23 @@ def analitical(r, R, G, q, cv,M,t):
         v_final.append([talbot(M, t, pbar,r[l],f_const)])
     return np.array(v_final)
 t=0.1
+
+
+def analitical_def(r,M,t):
+    v_final = []
+    f_const = talbot(M, t, f_coef)
+    print(f_const)
+    for l in range(len(r)):   
+        v = 0
+        v_final.append([talbot(M, t, rad_displacement,r[l],f_const)])
+    return np.array(v_final)
+t=0.1
+
+for i in range(3):
+    resultado = analitical_def(r, R, G, q, cv,M,t)
+    plt.plot(r, resultado)
+    t +=1000000
+plt.plot(r,np.log(r/R))
 
 for i in range(3):
     resultado = analitical(r, R, G, q, cv,M,t)
