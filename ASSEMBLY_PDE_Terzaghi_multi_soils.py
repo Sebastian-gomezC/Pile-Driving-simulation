@@ -193,6 +193,7 @@ Alpha = ((k2*m2)**(1/2))/((k1*m1)**(1/2))
 Beta = (t1/t2) ** (1/2)
 rango = 100
 cv = c2
+p0=0.0000004
 K=K(subd,k1,k2)
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
