@@ -4,3 +4,5 @@
 *.mesh
 *.h5
 *.xdmf
+*.pvt
+*.vtu

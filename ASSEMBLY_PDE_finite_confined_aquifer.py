@@ -92,7 +92,7 @@ q, v = split(V)
 steps=1000
 #material 
 t=0 # tiempo inicial
-Ti=300#tiempo total
+Ti=1.1#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 # B_s=1E-11
@@ -101,7 +101,7 @@ B_f=4.4E-10
 Poro=0.3
 nu=1/8#coeficiente de poisson  
 
-E=50000000# #modulo elasticidad
+E=30000000# #modulo elasticidad
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
 alpha=(1-B_s/B_m) #biotcoef
@@ -116,7 +116,7 @@ print("relacion K/G= ",1/(B_m*mu))
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 
-
+K=4.5E-3
 
 d = u.geometric_dimension()
 f = Constant((0, 0))
@@ -139,11 +139,9 @@ def sigma_3(T):
 
 n=FacetNormal(mesh)#vector normal      
 
-k=1.15E-5
-mv=1/((1/B_m)+((4/3)*mu))
-rango = 100
-cv = k/(alpha**2*mv+s_coef)
-K=k
+
+cv_dot =(K*(1/B_m+mu/3))/(alpha**2+s_coef*(1/B_m+mu/3))
+
 #boundary conditions 
 Caudal=10
 flo=Constant((Caudal/(2*math.pi*R_*H),0))
@@ -207,108 +205,84 @@ L_mass=lhs(F2)
 R_mass=rhs(F2)
 L=L_momentum+L_mass
 R_S=R_momentum+R_mass
-snaps=100
+snaps=50
 
-cv = 1
-time = 1
-R = 1
-steps = snaps
-Betta = 1
-t = 1
-G = 1
-K=10
-q = 10
-M=steps
-alpha=1
-p0=0.0000006
-r = np.linspace(0.01, R, steps)
+steps=1000
+Betta= alpha/(alpha**2 + s_coef*(1/B_m+mu/3))
+q = Caudal/(2*math.pi*R_*H*K)
+M=10
+r = np.linspace(0.01, R_, snaps)
 def pbar(r,s,f_const):
-    ro = r/R
-    sigmma = (s * R ** 2) / cv
+    ro=r/R_
+    sigmma = (s * R_ ** 2) / cv_dot
     I_cero_ro = besseli(0, ro * (sigmma) ** (1 / 2))
     K_cero_ro = besselk(0, ro * (sigmma) ** (1 / 2))
     I_cero = besseli(0, (sigmma) ** (1 / 2))
     K_cero = besselk(0, (sigmma) ** (1 / 2))
-    term_1 = (Betta * G * f_const / q) * (1 - I_cero_ro / I_cero)
-    term_2 = (1 / sigmma) * K_cero_ro
-    term_3 = (K_cero / I_cero) * I_cero_ro
-    v_ray = (term_1 - term_2 - term_3)
+    term_1 = (Betta * mu * f_const / q) * (1 - I_cero_ro / I_cero)
+    term_2 = (1 / sigmma) *( K_cero_ro-(K_cero / I_cero) * I_cero_ro)
+    v_ray = (term_1 - term_2 )
     return v_ray
 
 def f_coef(r,s,f_const):
-    sigmma = (s * R ** 2) / cv
+    ro=r/R_
+    sigmma = (s * R_ ** 2)/cv_dot
     part_1 = (2*alpha/sigmma**2)*(1-1/(besseli(0,np.sqrt(sigmma))))
-    part_2 = 3*K/G + alpha*Betta*(1-(2*besseli(1,np.sqrt(sigmma)))/(np.sqrt(sigmma)*besseli(0,np.sqrt(sigmma))))
-    return (part_1/part_2)*q/G
-
-def rad_displacement(s,f_const,r):
-    ro = r/R
-    sigmma=(s * R ** 2) / cv
-    if s==0:
-        None
-    else:
-        I_uno_ro = besseli(1, ro * (sigmma) ** (1 / 2))
-        K_uno_ro = besselk(1, ro * (sigmma) ** (1 / 2))
-        I_cero = besseli(0, (sigmma) ** (1 / 2))
-        K_cero = besselk(0, (sigmma) ** (1 / 2))
-        part_1 = ((alpha*Betta*((ro/4)-I_uno_ro/(2*sigmma ** (1/2)*I_cero)))-(ro/4)*((k/G)+4/3))*(G*f_const/q)
-        part_2 = (alpha/2*sigmma*sigmma**(1/2))*(K_uno_ro - (1/ro*sigmma ** (1/2) + (K_cero/I_cero))*I_uno_ro)
-        n_ray = part_1 + part_2
+    part_2 = 3/(B_m*mu) + alpha*Betta*(1-(2*besseli(1,np.sqrt(sigmma)))/(np.sqrt(sigmma)*besseli(0,np.sqrt(sigmma))))
+    return (part_1/part_2)*q/mu
+def rad_displacement(r,s,f_const):
+    ro = r/R_
+    sigmma=(s * R_ ** 2) / cv_dot
+    I_uno_ro = besseli(1, ro * (sigmma) ** (1 / 2))
+    K_uno_ro = besselk(1, ro * (sigmma) ** (1 / 2))
+    I_cero = besseli(0, (sigmma) ** (1 / 2))
+    K_cero = besselk(0, (sigmma) ** (1 / 2))
+    part_1_1 = ro/4- I_uno_ro/(2*sigmma**(1/2)*I_cero)
+    part_1_2 = ro/4*(1/(mu*B_m)+4/3)
+    part_1 = (alpha*Betta*part_1_1-part_1_2)*(mu*f_const/q)
+    part_2 = (alpha/(2*sigmma**(3/2)))*(K_uno_ro - 1/(ro*sigmma ** (1/2)) + (K_cero/I_cero)*I_uno_ro)
+    n_ray = part_1 + part_2
     return n_ray
 
 def talbot(M, t,Fun,r=0,f_const=0):
     v=0
-    if t==0:
-        None
-    else:
-        for k in range(M - 1):
-            if k == 0:
-                deltta =2 * M / 5
-                gamma = np.exp(deltta) / 2
-            else:
-               cot = 1 / np.tan(k * np.pi / M)
-               deltta = (2 * k * np.pi / 5) * (cot + 1j)
-               gamma = (1 + 1j * (k * np.pi / M) *(1+ (cot) ** 2) - 1j* cot) * np.exp(deltta)
-               term_fun = deltta / t
-               termino = (gamma * Fun(r,term_fun,f_const))
-               v += termino.real
-               v_final=((2) / (5 * t)) * v
-        return v_final
-
-        
-
+    for k in range(M - 1):
+        if k == 0:
+            delta =2 * M / 5
+            gamma = np.exp(delta) / 2
+        else:
+            cot = 1 / np.tan(k * np.pi / M)
+            delta = (2 * k * np.pi / 5) * (cot + 1j)
+            gamma = (1 + 1j * (k * np.pi / M) *(1+ (cot) ** 2) - 1j* cot) * np.exp(delta)
+        term_fun = delta / t
+        termino = (gamma * Fun(r,term_fun,f_const))
+        v += termino.real
+    v_final=((2) / (5 * t)) * v
+    return float(v_final)
     
 
 def p_analitico(r,M,t):
-    v_final = []
+    print("f_coef init")
     f_const = talbot(M, t, f_coef)
     print(f_const)
-    for l in range(int(len(r))):   
-        v = 0
-        v_final.append([talbot(M, t, pbar,r[l],f_const)])
-    return np.array(v_final)
-t=0.1
-
-
-def u_analiticos(r,M,t):
-    v_final = []
-    f_const = talbot(M, t, f_coef)
-    print(f_const)
-    for l in range(int(len(r))):   
-        v = 0
-        v_final.append([talbot(M, t, rad_displacement,r[l],f_const)])
-    return np.array(v_final)
-
-def u_analitico(r,M,t):
-    f_const = talbot(M, t, f_coef)
-    print(f_const)
-    for l in range(int(len(r))):   
-        v_final=talbot(M, t, rad_displacement, r[l],f_const)
+    print("p analico init")
+    for l in range(len(r)):   
+        if l==0:
+            v_final=np.array([[cv_dot*talbot(M, t, pbar,r=r[0],f_const=f_const)/R_**2,r[l]/R_]])
+        else:
+            v_final= np.append(v_final,np.array([[cv_dot*talbot(M, t, pbar,r=r[l],f_const=f_const)/R_**2,r[l]/R_]]),axis=0)
     return v_final
 
 
+def u_analitico(r,M,t):
+    print("u analico init")
+    v_final = []
+    f_const = talbot(M, t, f_coef)
+    v_final=talbot(M, t, rad_displacement,R_,f_const)
+    return v_final
+
+t=delta
 X_w = Function(W)
-u_f=mv*5E7
 bcs=[bc1,bc2,bp1]
 f = plt.figure()
 f.set_figwidth(10)
@@ -316,7 +290,7 @@ f.set_figheight(10)
 L2=[]
 uplot=[]
 ig, ax = plt.subplots()
-dtdot=(cv/R_**2)*delta
+dtdot=(cv_dot/R_**2)*delta
 for pot in range(steps):
     
     #A=assemble(L)
@@ -333,14 +307,10 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    tdot= (cv/R_**2)*t
+    tdot= (cv_dot/R_**2)*t
     print("tiempo adimensional = ", tdot)
     # post proceso 
     
-    if pot==0:
-        Po=0.000006
-        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*Po
-        p_0=Caudal/(2*math.pi*float(R_*H*k))
 
     if pot%(steps/50) ==0:
         s = sigma(u_)
@@ -360,42 +330,44 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-    uplot.append([(u_analitico(r,M,t)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
-    print(tdot)
+    uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q),tdot])
     z_=0
-    for k in range(snaps):
-        pdot=p_(z_*R_,5)/p_0
-        if k ==0:
-            results=np.array([[pdot,z_]])
-        else:
-            results =np.append(results,np.array([[pdot,z_]]),axis=0)
-        z_+=1/snaps
-    p_a = p_analitico(r,M,t)
-    L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
-    if near(t,0.01/(cv/R_**2),dt/2) or near(t,0.1/(cv/R_**2),dt/2) or near(t,1/(cv/R_**2),dt/2) :
-        
+    
+    if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
+        for y in range(snaps):
+            pdot=p_(z_*R_,5)/q
+            if y ==0:
+                results=np.array([[pdot,z_]])
+            else:
+                results =np.append(results,np.array([[pdot,z_]]),axis=0)
+            z_+=1/snaps
+        p_a = p_analitico(r,M,t)
+        L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
         
         line1, =ax.plot(results[:, 1],results[:, 0], "-",color='red',label='FEM',)
         plt.xlabel("$r/R$ ",fontsize=20)
         plt.ylabel("$p/q$",fontsize=20)
-        #line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='Analítica')
+        line2,=ax.plot(p_a[:, 1], p_a[:, 0], "--",color='black',label='Analítica')
         
         lines = plt.gca().get_lines()
         l1=lines[-1]
+        print("labelproblem")
         labelLine(l1,0.5,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
-        if near(t,0.01/(cv/R_**2),dt/2) :
+        print("labelproblem")
+        if near(t,0.01/(cv_dot/R_**2),dt/2) :
             ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
             
-        plt.xlim((0,1.01))
+        
        # print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
         
         
-        print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
-        print('p max:', p_.vector().get_local().max())
-        print('p min:', p_.vector().get_local().min())
-    if near(t,1/(cv/R_**2),dt/2):
+        
+    if near(t,1/(cv_dot/R_**2),dt/2):
         break
+    print('step', pot, 'of', steps,'time*:',tdot)
+
     t += delta
+    
 plt.savefig('RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
 ig, ax = plt.subplots()
@@ -413,8 +385,7 @@ uplot
 L2=np.array(L2)
 plt.semilogy(L2[:,1],L2[:,0])
 plt.savefig('RESULTADOS_ACUIFERO/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-np.savetxt('RESULTADOS_ACUIFERO/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (L2)) 
+np.savetxt('RESULTADOS_ACUIFERO/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (uplot)) 
 plt.close()
-
 
 
