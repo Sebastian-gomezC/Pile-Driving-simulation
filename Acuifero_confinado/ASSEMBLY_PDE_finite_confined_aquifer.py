@@ -89,7 +89,7 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 p, u = split(U)
 q, v = split(V)
 
-steps=1000
+steps=100
 #material 
 t=0 # tiempo inicial
 Ti=1.1#tiempo total
@@ -205,9 +205,9 @@ L_mass=lhs(F2)
 R_mass=rhs(F2)
 L=L_momentum+L_mass
 R_S=R_momentum+R_mass
-snaps=50
+snaps=100
 
-steps=1000
+steps=100
 Betta= alpha/(alpha**2 + s_coef*(1/B_m+mu/3))
 q = Caudal/(2*math.pi*R_*H*K)
 M=10
@@ -274,12 +274,15 @@ def p_analitico(r,M,t):
     return v_final
 
 
-def u_analitico(r,M,t):
+def u_analitico(r, M, t):
     print("u analico init")
-    v_final = []
-    f_const = talbot(M, t, f_coef)
-    v_final=talbot(M, t, rad_displacement,R_,f_const)
-    return v_final
+    u_final = []
+    for l in range(len(r)):
+        f_const = talbot(M, t, f_coef)
+        u_final.append([-talbot(M, t, rad_displacement, r=r[l], f_const=f_const), r[l]/R_])
+    u_final = np.array(u_final)
+    return u_final
+
 
 t=delta
 X_w = Function(W)
@@ -291,8 +294,18 @@ L2=[]
 uplot=[]
 ig, ax = plt.subplots()
 dtdot=(cv_dot/R_**2)*delta
+
+data_001 = []
+data_05 = []
+data_1 = []
+
+radio_001 = []
+radio_05 = []
+radio_1 = []
+
 for pot in range(steps):
-    
+
+
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
@@ -330,9 +343,29 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-    uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q),tdot])
     z_=0
-    
+    u_analiticos=u_analitico(r,M,tdot)
+    for i, row in enumerate(u_analiticos):  
+        if near(row[1], 0.01, dt / 2):  
+            print("YUJU")
+            radio_001.append([row[0], tdot])
+        elif near(row[1], 0.2, dt / 2):
+            print("uy")
+            radio_05.append([row[0], tdot])
+        elif near(row[1], 1, dt / 2):
+            print("caray")
+            radio_1.append([row[0], tdot])
+         
+    if near(t,0.01/(cv_dot/R_**2),dt/2):
+        print(tdot)
+        data_001.append(u_analiticos)
+    elif near(t,0.2/(cv_dot/R_**2),dt/2):
+        print(tdot)
+        data_05.append(u_analiticos)
+    elif near(t,0.99/(cv_dot/R_**2),dt/2):
+        print(tdot)
+        data_1.append(u_analiticos)
+
     if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
         for y in range(snaps):
             pdot=p_(z_*R_,5)/q
@@ -352,40 +385,60 @@ for pot in range(steps):
         lines = plt.gca().get_lines()
         l1=lines[-1]
         print("labelproblem")
-        labelLine(l1,0.5,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
+        labelLine(l1,0.1,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
         print("labelproblem")
-        if near(t,0.01/(cv_dot/R_**2),dt/2) :
+        if near(t,1/(cv_dot/R_**2),dt/2) :
             ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
             
-        
+        #uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q),tdot])
        # print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
         
-        
+      
         
     if near(t,1/(cv_dot/R_**2),dt/2):
         break
+
     print('step', pot, 'of', steps,'time*:',tdot)
 
     t += delta
     
-plt.savefig('RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
-ig, ax = plt.subplots()
-uplot=np.array(uplot)
-line1, = ax.plot(uplot[:, 2], -uplot[:, 0], "--", color='black', label='Analítica')
-line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
-ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
-ax.set_xscale('log')
-plt.xlabel("$t*$ ",fontsize=20)
-plt.ylabel("$u*_{z}$",fontsize=20)
-plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('RESULTADOS_ACUIFERO/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
-plt.close()
-uplot
-L2=np.array(L2)
-plt.semilogy(L2[:,1],L2[:,0])
-plt.savefig('RESULTADOS_ACUIFERO/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-np.savetxt('RESULTADOS_ACUIFERO/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (uplot)) 
-plt.close()
+print(p_)
 
+ 
+u_final=u_analitico(r,M,tdot)
+print(u_final)
 
+data_001 = np.concatenate(data_001)
+data_05 = np.concatenate(data_05)
+data_1 = np.concatenate(data_1)
+
+# Trazar la gráfica con las tres líneas
+plt.plot(data_001[:, 1], data_001[:, 0], label='t*=0.01')
+plt.plot(data_05[:, 1], data_05[:, 0], label='t*=0.2')
+plt.plot(data_1[:, 1], data_1[:, 0], label='t*=1')
+plt.xlabel("$r/R$")
+plt.ylabel("$u_z$")
+plt.legend()
+plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
+plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/desp_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.close()
+print(radio_001)
+
+x_values001 = [item[0] for item in radio_001]
+y_values001 = [item[1] for item in radio_001]
+x_values05 = [item[0] for item in radio_05]
+y_values05 = [item[1] for item in radio_05]
+x_values1 = [item[0] for item in radio_1]
+y_values1 = [item[1] for item in radio_1]
+# Trazar la gráfica con las tres líneas
+plt.plot(x_values001, y_values001, label='t*=0.01')
+plt.plot(x_values05, y_values05, label='t*=0.2')
+plt.plot(x_values1, y_values1, label='t*=1')
+plt.xlabel("$t*$")
+plt.ylabel("$u_z$")
+plt.legend()
+plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
+plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/desp(pvst)_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.close()
