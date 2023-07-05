@@ -35,9 +35,9 @@ def create_mesh(mesh, cell_type, prune_z=False):
             out_mesh.prune_z_0()
         return out_mesh
 print('creando malla..')
-R_=300
+R_=30
 H=10
-mesh=RectangleMesh(Point(0.0, 0.0), Point(R_,H), int(R_/2), int(H/2),"crossed")
+mesh=RectangleMesh(Point(0.0, 0.0), Point(R_,H), int(R_), int(H),"crossed")
 
 
 
@@ -46,15 +46,19 @@ tol =1E-6
 class Q(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and abs(x[0])< tol 
-class confinement(SubDomain):
+class down(SubDomain):
+    def inside(self,x,on_boundary):
+        return on_boundary and abs(x[1])<tol
+class up(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and( (abs(x[1])<tol) or (abs(x[1]-H)<tol))
+            return on_boundary and abs(x[1]-H)<tol
 class aquifer(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and (abs(x[0]-R_)<tol)
-confinement().mark(contorno, 2)
+down().mark(contorno, 2)
 Q().mark(contorno, 1)
 aquifer().mark(contorno, 3)
+up().mark(contorno,4)
 # archivos de salida 
 
 vtkfile_contorno = File('%s.results3/subd.pvd' % (nombre))
@@ -116,7 +120,7 @@ print("relacion K/G= ",1/(B_m*mu))
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 
-K=4.5E-3
+K=4.5E-6
 
 d = u.geometric_dimension()
 f = Constant((0, 0))
@@ -144,11 +148,11 @@ cv_dot =(K*(1/B_m+mu/3))/(alpha**2+s_coef*(1/B_m+mu/3))
 
 #boundary conditions 
 Caudal=10
-flo=Constant((Caudal/(2*math.pi*R_*H),0))
-bp1=DirichletBC(W.sub(0), 0.0, "near(x[0],298,0.5) && near(x[1],6,0.5)", method="pointwise")
-
-
-bc1 = DirichletBC(W.sub(1),(0.0,0.0),contorno,1)
+flo=Constant(((Caudal/(2*math.pi*H*K),0)))
+#bp1=DirichletBC(W.sub(0), 0.0, "near(x[0],298,0.5) && near(x[1],6,0.5)", method="pointwise")
+bp1=DirichletBC(W.sub(0), 0.0, contorno,3)
+bp2=DirichletBC(W.sub(0), -10*(Caudal/(2*math.pi*H*K)) , contorno,1)
+bc1 = DirichletBC(W.sub(1).sub(0),(0.0),contorno,1)
 bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,2)
 
 
@@ -198,7 +202,7 @@ F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
 + alpha*divu_t*q*dx + Constant((s_coef))*(dp_t)*q*dx\
--dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno)-dt*inner(flo,n)*q*ds(subdomain_id=3,domain=mesh, subdomain_data=contorno) -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) 
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) - dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
 L_momentum =lhs(F1) 
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -207,9 +211,9 @@ L=L_momentum+L_mass
 R_S=R_momentum+R_mass
 snaps=50
 
-steps=1000
+
 Betta= alpha/(alpha**2 + s_coef*(1/B_m+mu/3))
-q = Caudal/(2*math.pi*R_*H*K)
+q_ = Caudal/(2*math.pi*H*K)
 M=10
 r = np.linspace(0.01, R_, snaps)
 def pbar(r,s,f_const):
@@ -219,7 +223,7 @@ def pbar(r,s,f_const):
     K_cero_ro = besselk(0, ro * (sigmma) ** (1 / 2))
     I_cero = besseli(0, (sigmma) ** (1 / 2))
     K_cero = besselk(0, (sigmma) ** (1 / 2))
-    term_1 = (Betta * mu * f_const / q) * (1 - I_cero_ro / I_cero)
+    term_1 = (Betta * mu * f_const / q_) * (1 - I_cero_ro / I_cero)
     term_2 = (1 / sigmma) *( K_cero_ro-(K_cero / I_cero) * I_cero_ro)
     v_ray = (term_1 - term_2 )
     return v_ray
@@ -229,7 +233,7 @@ def f_coef(r,s,f_const):
     sigmma = (s * R_ ** 2)/cv_dot
     part_1 = (2*alpha/sigmma**2)*(1-1/(besseli(0,np.sqrt(sigmma))))
     part_2 = 3/(B_m*mu) + alpha*Betta*(1-(2*besseli(1,np.sqrt(sigmma)))/(np.sqrt(sigmma)*besseli(0,np.sqrt(sigmma))))
-    return (part_1/part_2)*q/mu
+    return (part_1/part_2)*q_/mu
 def rad_displacement(r,s,f_const):
     ro = r/R_
     sigmma=(s * R_ ** 2) / cv_dot
@@ -239,7 +243,7 @@ def rad_displacement(r,s,f_const):
     K_cero = besselk(0, (sigmma) ** (1 / 2))
     part_1_1 = ro/4- I_uno_ro/(2*sigmma**(1/2)*I_cero)
     part_1_2 = ro/4*(1/(mu*B_m)+4/3)
-    part_1 = (alpha*Betta*part_1_1-part_1_2)*(mu*f_const/q)
+    part_1 = (alpha*Betta*part_1_1-part_1_2)*(mu*f_const/q_)
     part_2 = (alpha/(2*sigmma**(3/2)))*(K_uno_ro - 1/(ro*sigmma ** (1/2)) + (K_cero/I_cero)*I_uno_ro)
     n_ray = part_1 + part_2
     return n_ray
@@ -262,24 +266,20 @@ def talbot(M, t,Fun,r=0,f_const=0):
     
 
 def p_analitico(r,M,t):
-    print("f_coef init")
     f_const = talbot(M, t, f_coef)
-    print(f_const)
-    print("p analico init")
     for l in range(len(r)):   
         if l==0:
-            v_final=np.array([[cv_dot*talbot(M, t, pbar,r=r[0],f_const=f_const)/R_**2,r[l]/R_]])
+            v_final=np.array([[talbot(M, t, pbar,r=r[0],f_const=f_const),r[l]/R_]])
         else:
-            v_final= np.append(v_final,np.array([[cv_dot*talbot(M, t, pbar,r=r[l],f_const=f_const)/R_**2,r[l]/R_]]),axis=0)
+            v_final= np.append(v_final,np.array([[talbot(M, t, pbar,r=r[l],f_const=f_const)*R_**2/cv_dot,r[l]/R_]]),axis=0)
     return v_final
 
 
 def u_analitico(r,M,t):
-    print("u analico init")
     v_final = []
     f_const = talbot(M, t, f_coef)
     v_final=talbot(M, t, rad_displacement,R_,f_const)
-    return v_final
+    return v_final*R_**2/cv_dot
 
 t=delta
 X_w = Function(W)
@@ -290,6 +290,8 @@ f.set_figheight(10)
 L2=[]
 uplot=[]
 ig, ax = plt.subplots()
+plt.ylim((-10,0))
+plt.xlim((0,1))
 dtdot=(cv_dot/R_**2)*delta
 for pot in range(steps):
     
@@ -330,19 +332,19 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u << u_
         flow.rename("flow", "flow") ;vtkfile_flow << flow
         p_.rename("pressure", "pressure"); vtkfile_p << p_
-    uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q),tdot])
+    uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q_),tdot])
     z_=0
     
     if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
         for y in range(snaps):
-            pdot=p_(z_*R_,5)/q
+            pdot=p_(z_*R_,5)/q_
             if y ==0:
                 results=np.array([[pdot,z_]])
             else:
                 results =np.append(results,np.array([[pdot,z_]]),axis=0)
             z_+=1/snaps
         p_a = p_analitico(r,M,t)
-        L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
+        L2.append([np.sum((results[:,0]**2-p_a[:,0])**2),tdot])
         
         line1, =ax.plot(results[:, 1],results[:, 0], "-",color='red',label='FEM',)
         plt.xlabel("$r/R$ ",fontsize=20)
@@ -352,7 +354,7 @@ for pot in range(steps):
         lines = plt.gca().get_lines()
         l1=lines[-1]
         print("labelproblem")
-        labelLine(l1,0.5,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
+        labelLine(l1,-5,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
         print("labelproblem")
         if near(t,0.01/(cv_dot/R_**2),dt/2) :
             ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')

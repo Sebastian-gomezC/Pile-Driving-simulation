@@ -1,0 +1,25 @@
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp: In member function ‘virtual void dolfin::dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:61:23: error: ‘Caudal’ was not declared in this scope
+           values[0] = Caudal/(2*math.pi*x[0]*H);
+                       ^~~~~~
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:61:23: note: suggested alternative: ‘gammal’
+           values[0] = Caudal/(2*math.pi*x[0]*H);
+                       ^~~~~~
+                       gammal
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:61:33: error: ‘math’ was not declared in this scope
+           values[0] = Caudal/(2*math.pi*x[0]*H);
+                                 ^~~~
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:61:33: note: suggested alternative:
+In file included from /usr/include/boost/variant/variant.hpp:43:0,
+                 from /usr/include/boost/variant.hpp:17,
+                 from /usr/local/include/dolfin/parameter/Parameters.h:25,
+                 from /usr/local/include/dolfin/common/Variable.h:28,
+                 from /usr/local/include/dolfin/function/GenericFunction.h:30,
+                 from /usr/local/include/dolfin/function/Expression.h:28,
+                 from /tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:13:
+/usr/include/boost/math/common_factor_ct.hpp:17:11: note:   ‘boost::math’
+ namespace math
+           ^~~~
+/tmp/tmp05bcpgyi/dolfin_expression_87e6cd911b6cefed60f7fd6db1b95812.cpp:61:46: error: ‘H’ was not declared in this scope
+           values[0] = Caudal/(2*math.pi*x[0]*H);
+                                              ^
