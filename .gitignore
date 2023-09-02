@@ -6,3 +6,9 @@
 *.xdmf
 *.pvd
 *.vtu
+<<<<<<< Updated upstream
+=======
+*.ai
+*.out
+*.zip
+>>>>>>> Stashed changes
