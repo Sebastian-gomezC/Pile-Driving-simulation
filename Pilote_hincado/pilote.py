@@ -74,6 +74,17 @@ class fine3(SubDomain):
 fine3().mark(cell_markers3, True)
 mesh = refine(mesh, cell_markers3)
 
+<<<<<<< Updated upstream
+=======
+cell_markers4 =  MeshFunction("bool", mesh,mesh.topology().dim())
+cell_markers4.set_all(False)
+class fine4(SubDomain):
+        def inside(self, x, on_boundary):
+            return (x[0]<=0.2 and x[1]>=-1) 
+fine4().mark(cell_markers4, True)
+mesh = refine(mesh, cell_markers4)
+
+>>>>>>> Stashed changes
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 tol=1E-6
 class disp(SubDomain):
@@ -88,15 +99,18 @@ class level(SubDomain):
 class far(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary   
+
 far().mark(contorno, 5)
 under().mark(contorno, 3)
 level().mark(contorno, 2)
 disp().mark(contorno, 1)
+# simetry().mark(contorno,6)
+
 subdominio = MeshFunction("size_t", mesh, mesh.topology().dim())
 tol=1E-2
 class S1(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[1])>= -3 
+            return  (x[1])>= -3
 class S2(SubDomain):
         def inside(self, x, on_boundary):
             return  ((x[1])<=-3) and ((x[1])>=(-8)) 
@@ -176,32 +190,47 @@ TS = TensorFunctionSpace(mesh, "DG", 0)
 
 p, u = split(U)
 q, v = split(V)
+<<<<<<< Updated upstream
 steps =200
+=======
+steps =18000
+>>>>>>> Stashed changes
 n=FacetNormal(mesh)#vector normal 
 x = SpatialCoordinate(mesh)
 
-Ti=100#tiempo total
+Ti=900#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
 t=0 # tiempo inicial
 # B_s=1E-11
 # B_m=1E-10
+<<<<<<< Updated upstream
 B_f=2.2E-9
 r=0.4
 Poro=0.5
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
 E=K(subdominio,20000000,80000000,20000000)# #modulo elasticidad15000000
+=======
+B_f=4.4E-10
+Poro=0.3
+r=0.4
+nu=0.3#coeficiente de poisson  
+flo=Constant((0,0))
+E=K(subdominio,2072E3,1E6,2072E3)# #modulo elasticidad
+mu = E/(2*(1+nu))#coeficientes de Lame
+lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
+>>>>>>> Stashed changes
 B_m=(E/(3*(1-2*nu)))**(-1)
-B_s=B_m/10
+B_s=0
 alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
-theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
-C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
+theta =K(subdominio,18.94,20.61,23.27) #angulos friccion interna
+C=K(subdominio,15530,10350,18650) #cohesion
+k=K(subdominio,1E-8,1E-1,1E-8)
 
 # E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 mu = E/(2*(1+nu))#coeficientes de Lame
-rho=Constant((8000)) #densidad
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 
@@ -230,17 +259,23 @@ def sigma_3(T):
     c=det(T)
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
-visco=1E-3
 
+<<<<<<< Updated upstream
 kappa=K(subdominio,5E-11/visco,1E-9/visco,5E-11/visco)#KM(subdominio,K1,K1,K1)#K1#
+=======
+>>>>>>> Stashed changes
 
 vtkfile_sudint= File('%s.results/subd.pvd' % (nombre))
 
 vtkfile_sudint << subdominio
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
+<<<<<<< Updated upstream
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 bp2=DirichletBC(W.sub(0),Constant((0)),contorno,5)
+=======
+bp1=DirichletBC(W.sub(0),Constant((0)),"near(x[1],0)", method="pointwise")
+>>>>>>> Stashed changes
 
 bc1 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,5)
 bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
@@ -268,10 +303,17 @@ du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
+<<<<<<< Updated upstream
 divu=pconst[0]*cildiv(u)
 divu_n=pconst[1]*cildiv(u_n)
 divu_nn=pconst[2]*cildiv(u_nn)
 divu_nnn=pconst[3]*cildiv(u_nnn)
+=======
+divu=    pconst[0]*(nabla_div(u)*x[0]    + u[0])
+divu_n=  pconst[1]*(nabla_div(u_n)*x[0]  + u_n[0])
+divu_nn= pconst[2]*(nabla_div(u_nn)*x[0] + u_nn[0])
+divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
+>>>>>>> Stashed changes
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -283,11 +325,30 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
 T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
+<<<<<<< Updated upstream
 F1 =  inner(sigma(u), epsilon(v))*x[0]*dx -alpha*p*cildiv(v)*x[0]*dx
 F2 = dt*kappa*(Dx(p,0)*Dx(q,0) + Dx(p,1)*Dx(q,1))*x[0]*dx \
     + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
     -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(1,3),domain=mesh, subdomain_data=contorno)
     
+=======
+#T=Constant((0,0))
+F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
+    -inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+# F2 = dt*inner(nabla_grad(q),nabla_grad(k*p))*dx \
+#     + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
+#     -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(1,3),domain=mesh, subdomain_data=contorno)
+
+
+# F1 = inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]/x[0]*dx - alpha*p*nabla_div(v)*x[0]*dx -alpha*p*v[0]*dx
+#     #-inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+
+
+F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
++ alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(3,1),domain=mesh, subdomain_data=contorno)
+
+>>>>>>> Stashed changes
 
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
@@ -299,6 +360,20 @@ R=R_momentum+R_mass
 X = Function(W)
 I=0
 v=0
+<<<<<<< Updated upstream
+=======
+
+pile_disp = '''
+if (x[1] <-I) {
+  0;
+} else {
+    if (x[1] > -I && x[1]< -I+(2*r)) {
+        x[1]+I;
+    }else{
+        
+        };
+}'''
+>>>>>>> Stashed changes
 for pot in range(steps):
     I=(v)*(delta)+I
     T.I=I
@@ -306,15 +381,22 @@ for pot in range(steps):
         v=3.5/(2*60 +15)
     else:
         v=2.5/(5*60)
+<<<<<<< Updated upstream
     if I<9:
         Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
+=======
+    if I<8:
+        T.I=I
+        Dis=Expression(('x[1] <=-I? 0 : (x[1] > -I && x[1]<= -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? r : 0)','0'),I=I,r=r ,degree=2)
+>>>>>>> Stashed changes
         residual = action(L, X)-R
         v_reac = Function(W)
         #apoyo izq:
-        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
+        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I? 0 : (x[1] > -I && x[1]< -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
 
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
+<<<<<<< Updated upstream
         if t==0:
             T.Rf=0
         else :
@@ -328,6 +410,19 @@ for pot in range(steps):
         v_reac = Function(W)
         #apoyo izq:
         bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=9,r=r ,degree=1),contorno, 1)  
+=======
+        if I>0:
+            T.Rf=0.05*assemble(action(residual, v_reac))/I
+        bc3 = DirichletBC(W.sub(1), Dis,contorno,1)
+        bcs=[bc1,bc2,bc3,bp1]
+    else:
+        T.I=8
+        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+(2*r)? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? r : 0)'),I=8,r=r ,degree=1)
+        residual = action(L, X)-R
+        v_reac = Function(W)
+        #apoyo izq:
+        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? 1 : 0)'),I=8,r=r ,degree=1),contorno, 1)  
+>>>>>>> Stashed changes
 
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
@@ -365,7 +460,7 @@ for pot in range(steps):
         fail = envFalla(o1, o2,theta,C)
         fs = tm
         fs=project(fs,Z)
-        flow=-kappa*grad(p_)
+        flow=-k*grad(p_)
         flow=project(flow,Z_v)
         fs.rename(" mean stress", "mean stress") ;vtkfile_fs.write(fs, t)
         u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)

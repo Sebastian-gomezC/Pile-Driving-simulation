@@ -201,11 +201,28 @@ ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 carga=5E7
 T=Constant((0,-carga))
 
+<<<<<<< Updated upstream
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
 F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
      + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
     -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+=======
+# F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
+#     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
+# F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
+#      + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
+#     -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+F1 = inner(sigma(u), epsilon(v))*x[0]*dx  +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]/x[0]*dx - alpha*p*nabla_div(v)*x[0]*dx -alpha*p*v[0]*dx\
+    -inner(T, v)*x[0]*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
+
+
+F2 = dt*inner(nabla_grad(q),nabla_grad(k*p))*x[0]*dx\
++ alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(5,1),domain=mesh, subdomain_data=contorno) 
+
+
+>>>>>>> Stashed changes
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)

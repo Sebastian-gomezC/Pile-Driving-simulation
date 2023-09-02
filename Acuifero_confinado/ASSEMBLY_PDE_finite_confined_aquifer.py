@@ -58,7 +58,6 @@ class aquifer(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and (abs(x[0]-R_)<tol)
 down().mark(contorno, 2)
-
 aquifer().mark(contorno, 3)
 up().mark(contorno,4)
 Q().mark(contorno, 1)
@@ -101,11 +100,21 @@ B_f=4.4E-10
 Poro=0.3
 nu=1/8#coeficiente de poisson  
 
+<<<<<<< Updated upstream
 E=30000000# #modulo elasticidad
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
 alpha=1#/(1-B_s/B_m) #biotcoef
 s_coef=0#(alpha-Poro)*B_s +Poro*B_f
+=======
+K_m=500E3
+nu=0.225#0.386#coeficiente de poisson  
+#E=3*K_m*(1-2*nu)#(9*K_m*G_m)/(3*K_m+G_m)# #modulo elasticidad
+B_m=(K_m)**(-1)
+B_s=0
+alpha=(1-B_s/B_m) #biotcoef
+s_coef=(alpha-Poro)*B_s +Poro*B_f
+>>>>>>> Stashed changes
 
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
@@ -147,6 +156,7 @@ t=0 # tiempo inicial
 Ti=0.15#tiempo total
 
 
+<<<<<<< Updated upstream
 dtdot=0.001
 delta= dtdot/(cv_dot/R_**2)
 steps=int( 1/dtdot)
@@ -154,6 +164,17 @@ dt=Constant((delta))
 #boundary conditions 
 Caudal=10
 flo=Constant(((Caudal/(2*math.pi*H)),0))
+=======
+
+dtdot=0.001
+delta= dtdot/(cv_dot/R_**2)
+steps=int( 2/dtdot)
+dt=Constant((delta))
+#boundary conditions 
+print('consolidation time =',1*R_**2/cv_dot)
+Caudal=1E-5
+flo=Constant((Caudal/(2*math.pi*H)))
+>>>>>>> Stashed changes
 #bp1=DirichletBC(W.sub(0), 0.0, "near(x[0],298,0.5) && near(x[1],6,0.5)", method="pointwise")
 bp1=DirichletBC(W.sub(0), 0.0, contorno,3)
 bc1 = DirichletBC(W.sub(1).sub(0),(0.0),contorno,1)
@@ -202,11 +223,21 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 T=Constant((0,0))
 
+<<<<<<< Updated upstream
 F1 = inner(sigma(u), epsilon(v))*x[0]*dx  +v[0]*lmbda*cildiv(u)*dx- alpha*p*cildiv(v)*x[0]*dx
 #F2 = dt*K*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
 F2 = dt*K*(Dx(q,0)*Dx(p,0) + Dx(q,1)*Dx(p,1))*x[0]*dx \
 + alpha*divu_t*q*x[0]*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
 -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(2,4),domain=mesh, subdomain_data=contorno) - dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+=======
+F1 = inner(sigma(u), epsilon(v))*x[0]*dx  +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]/x[0]*dx - alpha*p*nabla_div(v)*x[0]*dx -alpha*p*v[0]*dx\
+    -inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+
+
+F2 = dt*inner(nabla_grad(q),nabla_grad(K*p))*x[0]*dx\
++ alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(2,4),domain=mesh, subdomain_data=contorno) - dt*flo*n[0]*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+>>>>>>> Stashed changes
 
 L_momentum =lhs(F1) 
 R_momentum =rhs(F1)
@@ -292,7 +323,6 @@ def u_analitico(r, M, t):
     u_final = np.array(u_final)
     return u_final*R_**2/cv_dot
 def u_analiticoP(r, M, t):
-    print("u analico init")
     f_const = talbot(M, t, f_coef)
     u_final=-talbot(M, t, rad_displacement, r=r, f_const=f_const)
     return u_final*R_**2/cv_dot
@@ -330,6 +360,7 @@ for pot in range(steps):
     # post proceso 
     
 
+<<<<<<< Updated upstream
     # if pot%(steps/50) ==0:
     #     s = sigma(u_)
     #     cauchy=project(s,TS)
@@ -353,12 +384,41 @@ for pot in range(steps):
     if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
         for y in range(snaps):
             pdot=(p_(z_*R_,H/2)/(q_))
+=======
+    # if pot % 10== 0:
+        # s = sigma(u_)
+        
+        # cauchy=project(s,TS)
+
+        # o1 = sigma_1(cauchy)
+        
+        # o2 = sigma_3(cauchy)
+        
+        # tm=(o1-o2)/2
+        # fail = envFalla(o1, o2,theta,C)
+        # fs = tm
+        # fs=project(fs,Z)
+        # flow=-K*grad(p_)
+        # flow=project(flow,Z_v)
+        # fs.rename(" mean stress", "mean stress") ;vtkfile_fs.write(fs, t)
+        # u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)
+        # flow.rename("flow", "flow") ;vtkfile_flow.write(flow, t)
+        # p_.rename("pressure", "pressure"); vtkfile_p.write(p_, t)
+    uplot.append([(lmbda+mu)*u_(0.015*R_,0)[0]/(R_*q_),(lmbda+mu)*u_(0.13*R_,0)[0]/(R_*q_),(lmbda+mu)*u_(R_,0)[0]/(R_*q_),tdot])
+    #urplot.append([u_analiticoP(0.01*R_, M, t),u_analiticoP(0.1*R_, M, t),u_analiticoP(R_, M, t),tdot])
+    z_=0
+    if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
+        for y in range(snaps):
+            pdot=(p_(z_*R_,0)/(q_))
+            udot=(-(lmbda+mu)*u_(z_*R_,H)[0]/(R_*q_))
+>>>>>>> Stashed changes
             if y ==0:
                 results=np.array([[pdot,z_]])
             else:
                 results =np.append(results,np.array([[pdot,z_]]),axis=0)
             z_+=1/snaps
         p_a = p_analitico(r,M,t)
+<<<<<<< Updated upstream
         L2.append([np.sum((results[:,0]**2-p_a[:,0])**2),tdot])
         
         line1, =ax.plot(results[:, 1],results[:, 0], "-",color='red',label='FEM',)
@@ -380,16 +440,50 @@ for pot in range(steps):
     if near(t,1/(cv_dot/R_**2),dt/2):
         break
 
+=======
+        #u_a = u_analitico(r,M,t)
+        #L2.append([np.sum((results[:,0]**2-p_a[:,0])**2),tdot])
+        #pressure grap
+        line1, =pres.plot(results[:, 2],results[:, 0], "-",color='red',label='FEM')
+        pres.set_ylabel("$p/q$",fontsize=15)
+        pres.set_xlabel("$R/r$",fontsize=15)
+        line2,=pres.plot(p_a[:, 1], p_a[:, 0], "--",color='black',label='Analítica')
+        pres.set_xlim(0,1)
+        pres.set_ylim(-5,0)
+        
+        # lines = plt.gca().get_lines()
+        # l1=lines[-1]
+        # labelLine(l1,-2,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
+        # if near(t,0.01/(cv_dot/R_**2),dt/2) :
+        #     pres.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
+        #displament grap
+        # u_a = u_analitico(r,M,t)
+        # #pressure grap
+        # line1, =disp.plot(results[:, 2],results[:, 1], "-",color='red',label='FEM')
+        # disp.set_ylabel("$p/q$",fontsize=20)
+        # line2,=disp.plot(u_a[:, 1], u_a[:, 0], "--",color='black',label='Analítica')
+        # disp.set_xlim(0,1)
+        # disp.set_ylim(0,0.25)
+>>>>>>> Stashed changes
     print('step', pot, 'of', steps,'time*:',tdot)
 
     t += delta
-    
+plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
 plt.savefig('RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
 ig, ax = plt.subplots()
 uplot=np.array(uplot)
+<<<<<<< Updated upstream
 line1, = ax.plot(uplot[:, 2], -uplot[:, 0], "--", color='black', label='Analítica')
 line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+=======
+urplot=np.array(urplot)
+np.savetxt('RESULTADOS_ACUIFERO/disp%s_grosse_%s.out'%(round(dtdot,5),scheme), (uplot)) 
+line1, = ax.plot(uplot[:, 3], -uplot[:,0], "--", color='black')
+line2, = ax.plot(uplot[:,3],  -uplot[:,1], "--", color='black')
+line3, = ax.plot(uplot[:,3],  -uplot[:,2], "--", color='black',label='FEM')
+line4, = ax.plot([-1,-2], [-5,-6], "-", color='red',label='Analitical')
+>>>>>>> Stashed changes
 ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
 ax.set_xscale('log')
 plt.xlabel("$t*$ ",fontsize=20)
