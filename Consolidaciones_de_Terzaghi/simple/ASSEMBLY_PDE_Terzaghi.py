@@ -36,7 +36,7 @@ def create_mesh(mesh, cell_type, prune_z=False):
 print('creando malla..')
 H=1
 D=0.5
-mesh=RectangleMesh(Point(-float(D/2), 0.0), Point(float(D/2),-H), int(D*10), abs(int(H*10)),"crossed")
+mesh=RectangleMesh(Point(0, 0.0), Point(float(D/2),-H), int(D*10), abs(int(H*20)),"crossed")
 #geo = mshr.Rectangle(Point(-0.25, 0.0), Point(0.25,-1))
 #mesh = mshr.generate_mesh(geo,25)
 # cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -57,7 +57,7 @@ class bound(SubDomain):
             return on_boundary and abs(x[1]+H)< tol 
 class walls(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and ((abs(x[0]+D/2)< tol) or (abs(x[0]-D/2)< tol) )
+            return on_boundary and ((abs(x[0])< tol) or (abs(x[0]-D/2)< tol) )
 load().mark(contorno, 2)
 bound().mark(contorno, 5)
 walls().mark(contorno, 1)
@@ -102,7 +102,7 @@ B_f=4.4E-10
 Poro=0.3
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-E=50000000# #modulo elasticidad
+E=100E6# #modulo elasticidad
 mu = E/(2*(1+nu))#coeficientes de Lame
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 B_m=(E/(3*(1-2*nu)))**(-1)
@@ -184,10 +184,10 @@ du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
-divu=pconst[0]*nabla_div(u)
-divu_n=pconst[1]*nabla_div(u_n)
-divu_nn=pconst[2]*nabla_div(u_nn)
-divu_nnn=pconst[3]*nabla_div(u_nnn)
+divu=    pconst[0]*(nabla_div(u)*x[0]+ u[0])
+divu_n=  pconst[1]*(nabla_div(u_n)*x[0]+ u_n[0])
+divu_nn= pconst[2]*(nabla_div(u_nn)*x[0]+ u_nn[0])
+divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -201,13 +201,6 @@ ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 carga=5E7
 T=Constant((0,-carga))
 
-<<<<<<< Updated upstream
-F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
-    -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
-     + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx\
-    -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=5,domain=mesh, subdomain_data=contorno)  -dt*inner(flo,nabla_grad(q))*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
-=======
 # F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
 #     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
 # F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
@@ -222,7 +215,6 @@ F2 = dt*inner(nabla_grad(q),nabla_grad(k*p))*x[0]*dx\
 -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(5,1),domain=mesh, subdomain_data=contorno) 
 
 
->>>>>>> Stashed changes
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -263,7 +255,7 @@ def u_analitico(time,snaps,cv,p0):
     return a
 
 X_w = Function(W)
-bcs=[bc1,bc2,bp1]
+
 f = plt.figure()
 f.set_figwidth(10)
 f.set_figheight(10)
@@ -273,13 +265,14 @@ u_f=mv*carga
 print('u final',u_f)
 ig, ax = plt.subplots()
 dtdot=(cv/1**2)*delta
+bcs=[bc1,bc2,bp1]
 for pot in range(steps):
     
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
     #[bc.apply(b) for bc in bcs]
-
+    
     solve(L==R,X_w,bcs)
     X_nnn.assign(X_nn)
     p_nnn, u_nnn = split(X_nnn)
@@ -295,7 +288,7 @@ for pot in range(steps):
         u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*carga
         p_0=carga#p_(0.00,-0.1)
     tdot=(cv/H**2)*t
-    if pot%(steps/50) ==0:
+    if pot%(steps/10) ==0:
         s = sigma(u_)
         cauchy=project(s,TS)
 
@@ -354,8 +347,8 @@ plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme
 plt.close()
 ig, ax = plt.subplots()
 uplot=np.array(uplot)
-line1, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
-line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+line1,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+line2, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
 ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
 ax.set_xscale('log')
 plt.xlabel("$t*$ ",fontsize=20)

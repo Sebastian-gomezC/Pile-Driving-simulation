@@ -42,7 +42,7 @@ nombre = 'pilote_refinado_estructurado'
 
 #%%
 
-mesh=RectangleMesh(Point(0.0, 0.0), Point(40,-40), 40, 40,"crossed")
+mesh=RectangleMesh(Point(0.01, 0.0), Point(20,-30), 20, 30,"crossed")
 cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
 class fine0(SubDomain):
@@ -74,8 +74,6 @@ class fine3(SubDomain):
 fine3().mark(cell_markers3, True)
 mesh = refine(mesh, cell_markers3)
 
-<<<<<<< Updated upstream
-=======
 cell_markers4 =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers4.set_all(False)
 class fine4(SubDomain):
@@ -84,15 +82,18 @@ class fine4(SubDomain):
 fine4().mark(cell_markers4, True)
 mesh = refine(mesh, cell_markers4)
 
->>>>>>> Stashed changes
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 tol=1E-6
 class disp(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[0])< tol 
+            return on_boundary and (abs(x[0]-0.01)< tol )#and (x[1]>-I)
+class simetry(SubDomain):
+        def inside(self,x,on_boundary):
+             return on_boundary and  abs(x[0]-0.01)< tol        
+
 class under(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1]+40)< tol 
+            return on_boundary and abs(x[1]+30)< tol 
 class level(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and (abs(x[1])< tol) 
@@ -120,20 +121,23 @@ class S3(SubDomain):
 S2().mark(subdominio, 2)
 S1().mark(subdominio, 1)
 S3().mark(subdominio, 3)
-vtkfile_u = XDMFFile("%s.results/velocity.xdmf" % (nombre))
+vtkfile_u = XDMFFile("%s.results/displacement.xdmf" % (nombre))
 vtkfile_fs = XDMFFile("%s.results/Mohr-Coulomb_Fs.xdmf" % (nombre))
 vtkfile_p = XDMFFile("%s.results/Pressure.xdmf" % (nombre))
-vtkfile_flow = XDMFFile("%s.results/flow..xdmf" % (nombre))
+vtkfile_flow = XDMFFile("%s.results/flow.xdmf" % (nombre))
+vtkfile_bounds = XDMFFile("%s.results/bounds.xdmf" % (nombre))
 #material 
 
 vtkfile_u.parameters["flush_output"] = True
 vtkfile_fs.parameters["flush_output"] = True
 vtkfile_p.parameters["flush_output"] = True
 vtkfile_flow.parameters["flush_output"] = True
+vtkfile_bounds.parameters["flush_output"] = True
 vtkfile_u.parameters["rewrite_function_mesh"] = False
 vtkfile_fs.parameters["rewrite_function_mesh"] = False
 vtkfile_p.parameters["rewrite_function_mesh"] = False
 vtkfile_flow.parameters["rewrite_function_mesh"] = False
+vtkfile_bounds.parameters["rewrite_function_mesh"] = False
     
 class K(UserExpression):
     def __init__(self, subdominio, k_0, k_1,k_2, **kwargs):
@@ -177,7 +181,7 @@ def epsilon(u):
     
 #esfuerzo 
 def sigma(u):
-    return lmbda*cildiv(u)*Identity(d) + 2*mu*epsilon(u)
+    return lmbda*tr(epsilon(u))*Identity(d) + 2*mu*epsilon(u)
 ele_p  = FiniteElement("P",mesh.ufl_cell(), 1) # pressure
 ele_u  = VectorElement("P",mesh.ufl_cell(), 1) # solid displacement
 W = MixedElement([ele_p, ele_u])
@@ -190,11 +194,7 @@ TS = TensorFunctionSpace(mesh, "DG", 0)
 
 p, u = split(U)
 q, v = split(V)
-<<<<<<< Updated upstream
-steps =200
-=======
 steps =18000
->>>>>>> Stashed changes
 n=FacetNormal(mesh)#vector normal 
 x = SpatialCoordinate(mesh)
 
@@ -204,14 +204,6 @@ dt=Constant((delta))
 t=0 # tiempo inicial
 # B_s=1E-11
 # B_m=1E-10
-<<<<<<< Updated upstream
-B_f=2.2E-9
-r=0.4
-Poro=0.5
-nu=0.3#coeficiente de poisson  
-flo=Constant((0,0))
-E=K(subdominio,20000000,80000000,20000000)# #modulo elasticidad15000000
-=======
 B_f=4.4E-10
 Poro=0.3
 r=0.4
@@ -220,7 +212,6 @@ flo=Constant((0,0))
 E=K(subdominio,2072E3,1E6,2072E3)# #modulo elasticidad
 mu = E/(2*(1+nu))#coeficientes de Lame
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
->>>>>>> Stashed changes
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=0
 alpha=(1-B_s/B_m) #biotcoef
@@ -260,25 +251,16 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
 
-<<<<<<< Updated upstream
-kappa=K(subdominio,5E-11/visco,1E-9/visco,5E-11/visco)#KM(subdominio,K1,K1,K1)#K1#
-=======
->>>>>>> Stashed changes
 
 vtkfile_sudint= File('%s.results/subd.pvd' % (nombre))
+vtkfile_sudint<< contorno
 
-vtkfile_sudint << subdominio
 H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 
-<<<<<<< Updated upstream
-bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
-bp2=DirichletBC(W.sub(0),Constant((0)),contorno,5)
-=======
 bp1=DirichletBC(W.sub(0),Constant((0)),"near(x[1],0)", method="pointwise")
->>>>>>> Stashed changes
 
-bc1 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,5)
-bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
+bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,5)
+bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,3)
 
 
 x_n=Expression(('0','0','0'), gam=gam,degree=3)
@@ -295,25 +277,18 @@ p_nnn, u_nnn = split(X_nnn)
 #
 #pconst=[3./2,-2,1./2,0.0] #bdf2
 #pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
-pconst= [11/6,-3,3/2,-1/3] #bdf 3
-#pconst=[1,-1,0,0] #bdf1
+#pconst= [11/6,-3,3/2,-1/3] #bdf 3
+pconst=[1,-1,0,0] #bdf1
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
-<<<<<<< Updated upstream
-divu=pconst[0]*cildiv(u)
-divu_n=pconst[1]*cildiv(u_n)
-divu_nn=pconst[2]*cildiv(u_nn)
-divu_nnn=pconst[3]*cildiv(u_nnn)
-=======
 divu=    pconst[0]*(nabla_div(u)*x[0]    + u[0])
 divu_n=  pconst[1]*(nabla_div(u_n)*x[0]  + u_n[0])
 divu_nn= pconst[2]*(nabla_div(u_nn)*x[0] + u_nn[0])
 divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
->>>>>>> Stashed changes
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -325,13 +300,6 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
 T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
-<<<<<<< Updated upstream
-F1 =  inner(sigma(u), epsilon(v))*x[0]*dx -alpha*p*cildiv(v)*x[0]*dx
-F2 = dt*kappa*(Dx(p,0)*Dx(q,0) + Dx(p,1)*Dx(q,1))*x[0]*dx \
-    + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
-    -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(1,3),domain=mesh, subdomain_data=contorno)
-    
-=======
 #T=Constant((0,0))
 F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
     -inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
@@ -348,20 +316,11 @@ F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
 + alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
 -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(3,1),domain=mesh, subdomain_data=contorno)
 
->>>>>>> Stashed changes
 
-L_momentum =lhs(F1)
-R_momentum =rhs(F1)
-L_mass=lhs(F2)
-R_mass=rhs(F2)
-L=L_momentum+L_mass
-R=R_momentum+R_mass
 
 X = Function(W)
 I=0
 v=0
-<<<<<<< Updated upstream
-=======
 
 pile_disp = '''
 if (x[1] <-I) {
@@ -373,22 +332,22 @@ if (x[1] <-I) {
         
         };
 }'''
->>>>>>> Stashed changes
 for pot in range(steps):
     I=(v)*(delta)+I
-    T.I=I
+    
+    L_momentum =lhs(F1)
+    R_momentum =rhs(F1)
+    L_mass=lhs(F2)
+    R_mass=rhs(F2)
+    L=L_momentum+L_mass
+    R=R_momentum+R_mass
     if I>=5 and I<8:
         v=3.5/(2*60 +15)
     else:
         v=2.5/(5*60)
-<<<<<<< Updated upstream
-    if I<9:
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
-=======
     if I<8:
         T.I=I
         Dis=Expression(('x[1] <=-I? 0 : (x[1] > -I && x[1]<= -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? r : 0)','0'),I=I,r=r ,degree=2)
->>>>>>> Stashed changes
         residual = action(L, X)-R
         v_reac = Function(W)
         #apoyo izq:
@@ -396,21 +355,6 @@ for pot in range(steps):
 
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
-<<<<<<< Updated upstream
-        if t==0:
-            T.Rf=0
-        else :
-            T.Rf=0
-            #T.Rf=0.05*assemble(action(residual, v_reac))/I
-        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        bcs=[bc1,bc2,bc3,bp1,bp2]
-    else:
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=9,r=r ,degree=1)
-        residual = action(L, X)-R
-        v_reac = Function(W)
-        #apoyo izq:
-        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=9,r=r ,degree=1),contorno, 1)  
-=======
         if I>0:
             T.Rf=0.05*assemble(action(residual, v_reac))/I
         bc3 = DirichletBC(W.sub(1), Dis,contorno,1)
@@ -422,14 +366,12 @@ for pot in range(steps):
         v_reac = Function(W)
         #apoyo izq:
         bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? 1 : 0)'),I=8,r=r ,degree=1),contorno, 1)  
->>>>>>> Stashed changes
 
         bc_Rx_i.apply(v_reac.vector())
         print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
         bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        T.Rf=0
-        #T.Rf=0.05*assemble(action(residual, v_reac))/9
-        bcs=[bc1,bc2,bc3,bp1,bp2]
+        T.Rf=0.05*assemble(action(residual, v_reac))/0.5
+        bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
     A=assemble(L)
     b=assemble(R)
@@ -466,7 +408,6 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)
         flow.rename("flow", "flow") ;vtkfile_flow.write(flow, t)
         p_.rename("pressure", "pressure"); vtkfile_p.write(p_, t)
-
     print('u max:',u_.vector().get_local().max(),'step', pot, 'of', steps,'time:',t,'deep',I)
     print('p max:', p_.vector().get_local().max())
     print('p min:', p_.vector().get_local().min())
