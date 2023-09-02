@@ -1,0 +1,7 @@
+/tmp/tmp3nnwoshj/dolfin_expression_62ea1f0676a5fa7064a1bc7bb4d3f77c.cpp: In member function ‘virtual void dolfin::dolfin_expression_62ea1f0676a5fa7064a1bc7bb4d3f77c::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmp3nnwoshj/dolfin_expression_62ea1f0676a5fa7064a1bc7bb4d3f77c.cpp:62:24: error: ‘carga’ was not declared in this scope
+           values[1] = -carga*x[0]**-1;
+                        ^~~~~
+/tmp/tmp3nnwoshj/dolfin_expression_62ea1f0676a5fa7064a1bc7bb4d3f77c.cpp:62:37: error: invalid type argument of unary ‘*’ (have ‘int’)
+           values[1] = -carga*x[0]**-1;
+                                     ^

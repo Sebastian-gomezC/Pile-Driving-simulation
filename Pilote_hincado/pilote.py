@@ -47,7 +47,7 @@ cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
 class fine0(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[1]>-20) and (x[0]<20)
+            return  (x[1]>-13) and (x[0]<=3)
 fine0().mark(cell_markers, True)
 mesh = refine(mesh, cell_markers)
 
@@ -55,7 +55,7 @@ cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
 class fine1(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[0]<=5 and x[1]>-12) 
+            return  (x[0]<=2 and x[1]>=-12) 
 fine1().mark(cell_markers, True)
 mesh = refine(mesh, cell_markers)
 cell_markers2 =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -63,14 +63,14 @@ cell_markers2.set_all(False)
 
 class fine2(SubDomain):
         def inside(self, x, on_boundary):
-            return  (x[0]<=2 and x[1]>-11.5) 
+            return  (x[0]<=1 and x[1]>=-11) 
 fine2().mark(cell_markers2, True)
 mesh = refine(mesh, cell_markers2)
 cell_markers3 =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers3.set_all(False)
 class fine3(SubDomain):
         def inside(self, x, on_boundary):
-            return (x[0]<=0.5 and x[1]>-10) 
+            return (x[0]<=0.5 and x[1]>=-10) 
 fine3().mark(cell_markers3, True)
 mesh = refine(mesh, cell_markers3)
 
@@ -155,14 +155,15 @@ class KM(UserExpression):
             values = self.k_1
         else:
             values=self.k_2
-
+def cildiv(v):
+    return Dx(v[0],0)+v[0]/x[0]+Dx(v[1],1)
 #deformacion
 def epsilon(u):
     return 0.5*(nabla_grad(u) + nabla_grad(u).T)
     
 #esfuerzo 
 def sigma(u):
-    return lmbda*div(u)*Identity(d) + 2*mu*epsilon(u)
+    return lmbda*cildiv(u)*Identity(d) + 2*mu*epsilon(u)
 ele_p  = FiniteElement("P",mesh.ufl_cell(), 1) # pressure
 ele_u  = VectorElement("P",mesh.ufl_cell(), 1) # solid displacement
 W = MixedElement([ele_p, ele_u])
@@ -175,12 +176,14 @@ TS = TensorFunctionSpace(mesh, "DG", 0)
 
 p, u = split(U)
 q, v = split(V)
-steps =760*2
+steps =200
 n=FacetNormal(mesh)#vector normal 
-t=0 # tiempo inicial
-Ti=760#tiempo total
+x = SpatialCoordinate(mesh)
+
+Ti=100#tiempo total
 delta= Ti/steps
 dt=Constant((delta))
+t=0 # tiempo inicial
 # B_s=1E-11
 # B_m=1E-10
 B_f=2.2E-9
@@ -191,7 +194,7 @@ flo=Constant((0,0))
 E=K(subdominio,20000000,80000000,20000000)# #modulo elasticidad15000000
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
-alpha=1 #(1-B_s/B_m) #biotcoef
+alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
@@ -208,11 +211,7 @@ d = u.geometric_dimension()
 f = Constant((0, 0))
 lam=Constant((0))
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-def h(p):
-    x=SpatialCoordinate(mesh)
-    gam =Constant((9806.65))
-    g=Constant((0,-1))
-    return p/gam - x[1]
+
 
 #theta=s/(1-s)
 gam =Constant((9806.65))
@@ -232,10 +231,6 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
 visco=1E-3
-K1=Constant(((1E-11/visco,0),(0,1E-11/visco)))
-K2=Constant(((1E-9/visco,0),(0,1E-9/visco)))
-K3=Constant(((1E-11/visco,0),(0,1E-11/visco)))
-
 
 kappa=K(subdominio,5E-11/visco,1E-9/visco,5E-11/visco)#KM(subdominio,K1,K1,K1)#K1#
 
@@ -247,7 +242,7 @@ H=Expression(('-gam*x[1]'),gam=gam,degree=1)
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 bp2=DirichletBC(W.sub(0),Constant((0)),contorno,5)
 
-bc1 = DirichletBC(W.sub(1).sub(0), Constant((0.0)),contorno,5)
+bc1 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,5)
 bc2 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,3)
 
 
@@ -273,10 +268,10 @@ du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
-divu=pconst[0]*nabla_div(u)
-divu_n=pconst[1]*nabla_div(u_n)
-divu_nn=pconst[2]*nabla_div(u_nn)
-divu_nnn=pconst[3]*nabla_div(u_nnn)
+divu=pconst[0]*cildiv(u)
+divu_n=pconst[1]*cildiv(u_n)
+divu_nn=pconst[2]*cildiv(u_nn)
+divu_nnn=pconst[3]*cildiv(u_nnn)
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -287,12 +282,13 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
-T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=t,degree=2)
+T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
+F1 =  inner(sigma(u), epsilon(v))*x[0]*dx -alpha*p*cildiv(v)*x[0]*dx
+F2 = dt*kappa*(Dx(p,0)*Dx(q,0) + Dx(p,1)*Dx(q,1))*x[0]*dx \
+    + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
+    -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(1,3),domain=mesh, subdomain_data=contorno)
+    
 
-F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
-    -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
-F2 = dt*inner(nabla_grad(q), kappa*nabla_grad(p))*dx \
-    + alpha*divu_t*q*dx + s_coef*(dp_t)*q*dx
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -355,7 +351,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 1== 0:
+    if pot % 10== 0:
         print('postproces')
         s = sigma(u_)
         

@@ -34,8 +34,9 @@ def create_mesh(mesh, cell_type, prune_z=False):
             out_mesh.prune_z_0()
         return out_mesh
 print('creando malla..')
-mesh=RectangleMesh(Point(-0.25, 0.0), Point(0.25,-1), 10, 20,"crossed")
-h1=0.1
+H=1
+D=0.5
+mesh=RectangleMesh(Point(-float(D/2), 0.0), Point(float(D/2),-H), int(D*10), abs(int(H*10)),"crossed")
 #geo = mshr.Rectangle(Point(-0.25, 0.0), Point(0.25,-1))
 #mesh = mshr.generate_mesh(geo,25)
 # cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
@@ -53,78 +54,23 @@ class load(SubDomain):
             return on_boundary and abs(x[1])< tol 
 class bound(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[1]+1)< tol 
+            return on_boundary and abs(x[1]+H)< tol 
 class walls(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and ((abs(x[0]+0.25)< tol) or (abs(x[0]-0.25)< tol) )
+            return on_boundary and ((abs(x[0]+D/2)< tol) or (abs(x[0]-D/2)< tol) )
 load().mark(contorno, 2)
 bound().mark(contorno, 5)
 walls().mark(contorno, 1)
 
-subd = MeshFunction("size_t", mesh, mesh.topology().dim())
-
-class H1(SubDomain):
-    def inside(self,x,on_boundary):
-        return x[1]> h1 
-class H2(SubDomain):
-    def inside(self,x,on_boundary):
-        return x[1]<h1
-H1.mark(subd,1)
-H2.mark(subd,2)
-vtkfile_sub = File('%s.results3/subd.pvd' % (nombre))
-subd.rename("subdomain", "subdomain") ;vtkfile_sub << subd
 # archivos de salida 
 vtkfile_u = File('%s.results3/u.pvd' % (nombre))
 vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
 vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
 vtkfile_flow = File('%s.results3/flow.pvd' % (nombre))
 
-#material 
 
-    
-class K(UserExpression):
-    def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
-        super().__init__(**kwargs)
-        self.subdominio = subdominio
-        self.k_0 = k_0
-        self.k_1 = k_1
-        self.k_2 = k_2
-        self.k_3 = k_3
-        self.k_4 = k_4
-
-    def eval_cell(self, values, x, cell):
-        if self.subdominio[cell.index] == 1:
-            values[0] = self.k_0
-        elif self.subdominio[cell.index] == 2:
-            values[0] = self.k_1
-        elif self.subdominio[cell.index] == 3:
-            values[0] = self.k_2
-        elif self.subdominio[cell.index] == 4:
-            values[0] = self.k_3
-        else:
-            values[0]=self.k_4
-
-class KM(UserExpression):
-    def __init__(self, subdominio, k_0, k_1,k_2,k_3,k_4, **kwargs):
-        super().__init__(**kwargs)
-        self.subdominio = subdominio
-        self.k_0 = k_0
-        self.k_1 = k_1
-        self.k_2 = k_2
-        self.k_3 = k_3
-        self.k_4 = k_4
-
-    def eval_cell(self, values, x, cell):
-        if self.subdominio[cell.index] == 1:
-            values = self.k_0
-        elif self.subdominio[cell.index] == 2:
-            values = self.k_1
-        elif self.subdominio[cell.index] == 3:
-            values = self.k_2
-        elif self.subdominio[cell.index] == 4:
-            values = self.k_3
-        else:
-            values =self.k_4
+def cildiv(v):
+    return Dx((v[0]*x[0]),0)*(1/x[0])+Dx(v[1],1)  
 
 #deformacion
 def epsilon(u):
@@ -147,12 +93,9 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 
 p, u = split(U)
 q, v = split(V)
-steps =1
 
-t=0 # tiempo inicial
-Ti=0.01#tiempo total
-delta= Ti/steps
-dt=Constant((delta))
+
+#costantes del material
 # B_s=1E-11
 # B_m=1E-10
 B_f=4.4E-10
@@ -160,17 +103,28 @@ Poro=0.3
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
 E=50000000# #modulo elasticidad
+mu = E/(2*(1+nu))#coeficientes de Lame
+lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
 alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
-
+kappa=5E-9
+k=kappa/8.9E-4
+K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
+mv=1/((1/B_m)+((4/3)*mu))
+cv=k/(alpha**2*mv+s_coef)
+t=0
+dtdot=0.001
+delta= dtdot/(cv/abs(H)**2)
+steps=int( 1/dtdot)+10
+print("delta de tiempo",delta)
+dt=Constant((delta))
 # E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 print('modulo elasticidad ',E)
-mu = E/(2*(1+nu))#coeficientes de Lame
-lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
+
 
 
 
@@ -195,9 +149,7 @@ def sigma_3(T):
     return -b/2 - sqrt(b**2-4*c)/2
 
 n=FacetNormal(mesh)#vector normal      
-kappa=5E-9
-k=kappa/8.9E-4
-K=Constant(((k,0),(0,k)))#KM(subd,K1,K2,K3,K4,K5)
+x = SpatialCoordinate(mesh)
 
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
 
@@ -246,7 +198,8 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
-T=Constant((0,-5E7))
+carga=5E7
+T=Constant((0,-carga))
 
 F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
     -inner(T, v)*ds(subdomain_id=2, domain=mesh, subdomain_data=contorno)
@@ -260,9 +213,8 @@ R_mass=rhs(F2)
 L=L_momentum+L_mass
 R=R_momentum+R_mass
 snaps=100
-mv=1/((1/B_m)+((4/3)*mu))
-cv=k/(alpha**2*mv+s_coef)
-p0= ((alpha*mv)/(alpha**2*mv+s_coef))*5E7
+
+p0= ((alpha*mv)/(alpha**2*mv+s_coef))*carga
 def p_analitico(time,snaps,cv,p0):
     z=0
     for n in range(snaps):
@@ -270,8 +222,8 @@ def p_analitico(time,snaps,cv,p0):
                 if i==0:
                     p=0
                 else:
-                    c=math.sin((2*i-1)*math.pi*(z)/(2))
-                    b=math.exp(-(((2*i-1)*math.pi)/(2*1))**2*cv*time)
+                    c=math.sin((2*i-1)*math.pi*(z)/(2*H))
+                    b=math.exp(-(((2*i-1)*math.pi)/(2*H))**2*cv*time)
                     d=((1)/(2*i-1))
                     p=p+d*c*b
         p=4/math.pi*(p)
@@ -282,15 +234,15 @@ def p_analitico(time,snaps,cv,p0):
         z=z+1/snaps
     return a
 def u_analitico(time,snaps,cv,p0):
-    c=-mv*5e7*1
+    c=-mv*carga*H
     for i in range(100):
             if i==0:
                 p=0
             else:
-                b=math.exp(-(((2*i-1)*math.pi)/(2*1))**2*cv*time)
+                b=math.exp(-(((2*i-1)*math.pi)/(2*H))**2*cv*time)
                 d=((1)/(2*i-1)**2)
                 p+=b*d
-    a=8*alpha*mv*1/(math.pi**2)*p0*(p)+c
+    a=8*alpha*mv*H/(math.pi**2)*p0*(p)+c
     return a
 
 X_w = Function(W)
@@ -300,7 +252,7 @@ f.set_figwidth(10)
 f.set_figheight(10)
 L2=[]
 uplot=[]
-u_f=mv*5E7
+u_f=mv*carga
 print('u final',u_f)
 ig, ax = plt.subplots()
 dtdot=(cv/1**2)*delta
@@ -323,9 +275,9 @@ for pot in range(steps):
 
     # post proceso 
     if pot==0:
-        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*5e7
-        p_0=5E7#p_(0.00,-0.1)
-    tdot=(cv/1**2)*t
+        u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*carga
+        p_0=carga#p_(0.00,-0.1)
+    tdot=(cv/H**2)*t
     if pot%(steps/50) ==0:
         s = sigma(u_)
         cauchy=project(s,TS)
@@ -356,7 +308,7 @@ for pot in range(steps):
         z_=z_- 1/snaps
     p_a = p_analitico(t,snaps,cv,p0)
     L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
-    if near(t,0.01/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.1/(cv/1**2),dt/2) or near(t,0.5/(cv/1**2),dt/2)or near(t,1/(cv/1**2),dt/2):
+    if near(t,0.01/(cv/H**2),dt/2) or near(t,0.1/(cv/H**2),dt/2) or near(t,0.5/(cv/H**2),dt/2)or near(t,1/(cv/H**2),dt/2):
         
         
         line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='FEM',)
@@ -378,7 +330,7 @@ for pot in range(steps):
         print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
         print('p max:', p_.vector().get_local().max())
         print('p min:', p_.vector().get_local().min())
-    if near(t,2/(cv/1**2),dt/2):
+    if near(t,1/(cv/H**2),dt/2):
         break
     t += delta
 plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)

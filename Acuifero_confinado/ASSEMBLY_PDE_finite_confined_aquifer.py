@@ -23,7 +23,10 @@ import  sys
 import meshio
 import mshr
 from label_lines import *
-from mpmath import mpf, besseli, besselk
+def besseli(ord,f):
+    return bessel_I(ord,f).evaluate(0,0,0,0)
+def besselk(ord,f):
+    return int(bessel_K(ord,f).evaluate(0,0,0,0))
 flag ="R"
 parameters['allow_extrapolation'] = True
 nombre = 'finite_confined_aquifer'
@@ -35,17 +38,16 @@ def create_mesh(mesh, cell_type, prune_z=False):
             out_mesh.prune_z_0()
         return out_mesh
 print('creando malla..')
-R_=30
-H=10
-mesh=RectangleMesh(Point(0.0, 0.0), Point(R_,H), int(R_), int(H),"crossed")
-
+R_=50
+H=5
+mesh=RectangleMesh(Point(0.0, 0.0), Point(R_,H), int(R_/2), int(H/2),"crossed")
 
 
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 tol =1E-6
 class Q(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and abs(x[0])< tol 
+            return on_boundary and abs(x[0]-0.0)< tol 
 class down(SubDomain):
     def inside(self,x,on_boundary):
         return on_boundary and abs(x[1])<tol
@@ -56,9 +58,10 @@ class aquifer(SubDomain):
         def inside(self, x, on_boundary):
             return on_boundary and (abs(x[0]-R_)<tol)
 down().mark(contorno, 2)
-Q().mark(contorno, 1)
+
 aquifer().mark(contorno, 3)
 up().mark(contorno,4)
+Q().mark(contorno, 1)
 # archivos de salida 
 
 vtkfile_contorno = File('%s.results3/subd.pvd' % (nombre))
@@ -68,9 +71,8 @@ vtkfile_u = File('%s.results3/u.pvd' % (nombre))
 vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
 vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
 vtkfile_flow = File('%s.results3/flow.pvd' % (nombre))
-
-
-
+def cildiv(v):
+    return Dx(v[0],0)+v[0]/x[0]+Dx(v[1],1)
 
 #deformacion
 def epsilon(u):
@@ -78,10 +80,10 @@ def epsilon(u):
     
 #esfuerzo 
 def sigma(u):
-    return lmbda*div(u)*Identity(d)+2*mu*epsilon(u)
+    return lmbda*tr(epsilon(u))*Identity(d)+2*mu*epsilon(u)
 #Elementos finitos
 ele_p  = FiniteElement("P",mesh.ufl_cell(), 1) # pressure
-ele_u  = VectorElement("P",mesh.ufl_cell(), 1) # solid displacement
+ele_u  = VectorElement("P",mesh.ufl_cell(), 2) # solid displacement
 W = MixedElement([ele_p, ele_u])
 W = FunctionSpace(mesh, W)
 U = TrialFunction(W)
@@ -93,12 +95,6 @@ TS = TensorFunctionSpace(mesh, "P", 1)
 p, u = split(U)
 q, v = split(V)
 
-steps=100
-#material 
-t=0 # tiempo inicial
-Ti=1.1#tiempo total
-delta= Ti/steps
-dt=Constant((delta))
 # B_s=1E-11
 # B_m=1E-10
 B_f=4.4E-10
@@ -108,8 +104,9 @@ nu=1/8#coeficiente de poisson
 E=30000000# #modulo elasticidad
 B_m=(E/(3*(1-2*nu)))**(-1)
 B_s=B_m/10
-alpha=(1-B_s/B_m) #biotcoef
-s_coef=(alpha-Poro)*B_s +Poro*B_f
+alpha=1#/(1-B_s/B_m) #biotcoef
+s_coef=0#(alpha-Poro)*B_s +Poro*B_f
+
 theta =18.94#K(subd,18.94,20.61,23.27,20.53,21.84) #angulos friccion interna
 C=15530#K(subd,15530,10350,18650,18400,14000) #cohesion
 
@@ -120,7 +117,7 @@ print("relacion K/G= ",1/(B_m*mu))
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 
 
-K=4.5E-6
+K=4.5E-5
 
 d = u.geometric_dimension()
 f = Constant((0, 0))
@@ -142,22 +139,29 @@ def sigma_3(T):
     return -b/2 - sqrt(b**2-4*c)/2
 
 n=FacetNormal(mesh)#vector normal      
-
-
+x = SpatialCoordinate(mesh)
 cv_dot =(K*(1/B_m+mu/3))/(alpha**2+s_coef*(1/B_m+mu/3))
 
+#material 
+t=0 # tiempo inicial
+Ti=0.15#tiempo total
+
+
+dtdot=0.001
+delta= dtdot/(cv_dot/R_**2)
+steps=int( 1/dtdot)
+dt=Constant((delta))
 #boundary conditions 
 Caudal=10
-flo=Constant(((Caudal/(2*math.pi*H*K),0)))
+flo=Constant(((Caudal/(2*math.pi*H)),0))
 #bp1=DirichletBC(W.sub(0), 0.0, "near(x[0],298,0.5) && near(x[1],6,0.5)", method="pointwise")
 bp1=DirichletBC(W.sub(0), 0.0, contorno,3)
-bp2=DirichletBC(W.sub(0), -10*(Caudal/(2*math.pi*H*K)) , contorno,1)
 bc1 = DirichletBC(W.sub(1).sub(0),(0.0),contorno,1)
 bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,2)
 
 
 
-x_n=Expression(('std::log(x[0]+1)-std::log(R)','0','0'),R=R_,degree=3)
+x_n=Expression(('0','0','0'),R=R_,degree=3)
 X_n = Function(W)
 X_n=interpolate(x_n, W)
 p_n, u_n = split(X_n)
@@ -174,7 +178,7 @@ p_nnn, u_nnn = split(X_nnn)
 #pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
 #pconst= [11/6,-3,3/2,-1/3] #bdf 3
 pconst=[1,-1,0,0] #bdf1
-types=['BDF1','BDF2','BDF2op','BDF3']
+types=['BDF1','BDF2','BDF2op','BDF3_comp_cil']
 scheme=types[0]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
@@ -182,10 +186,10 @@ du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
-divu=pconst[0]*nabla_div(u)
-divu_n=pconst[1]*nabla_div(u_n)
-divu_nn=pconst[2]*nabla_div(u_nn)
-divu_nnn=pconst[3]*nabla_div(u_nnn)
+divu=    pconst[0]*cildiv(u)
+divu_n=  pconst[1]*cildiv(u_n)
+divu_nn= pconst[2]*cildiv(u_nn)
+divu_nnn=pconst[3]*cildiv(u_nnn)
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -198,18 +202,19 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 T=Constant((0,0))
 
-F1 = inner(sigma(u), epsilon(v))*dx -alpha*p*nabla_div(v)*dx\
-    -inner(T, v)*ds
-F2 = dt*inner(nabla_grad(q), K*nabla_grad(p))*dx \
-+ alpha*divu_t*q*dx + Constant((s_coef))*(dp_t)*q*dx\
--dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=2,domain=mesh, subdomain_data=contorno) - dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+F1 = inner(sigma(u), epsilon(v))*x[0]*dx  +v[0]*lmbda*cildiv(u)*dx- alpha*p*cildiv(v)*x[0]*dx
+#F2 = dt*K*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
+F2 = dt*K*(Dx(q,0)*Dx(p,0) + Dx(q,1)*Dx(p,1))*x[0]*dx \
++ alpha*divu_t*q*x[0]*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(2,4),domain=mesh, subdomain_data=contorno) - dt*inner(flo,n)*q*ds(subdomain_id=1,domain=mesh, subdomain_data=contorno) 
+
 L_momentum =lhs(F1) 
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
 R_mass=rhs(F2)
 L=L_momentum+L_mass
 R_S=R_momentum+R_mass
-snaps=100
+snaps=80
 
 
 Betta= alpha/(alpha**2 + s_coef*(1/B_m+mu/3))
@@ -238,6 +243,9 @@ def rad_displacement(r,s,f_const):
     ro = r/R_
     sigmma=(s * R_ ** 2) / cv_dot
     I_uno_ro = besseli(1, ro * (sigmma) ** (1 / 2))
+    print('-')
+    print(ro * (sigmma) ** (1 / 2))
+    print('-')
     K_uno_ro = besselk(1, ro * (sigmma) ** (1 / 2))
     I_cero = besseli(0, (sigmma) ** (1 / 2))
     K_cero = besselk(0, (sigmma) ** (1 / 2))
@@ -269,7 +277,7 @@ def p_analitico(r,M,t):
     f_const = talbot(M, t, f_coef)
     for l in range(len(r)):   
         if l==0:
-            v_final=np.array([[talbot(M, t, pbar,r=r[0],f_const=f_const),r[l]/R_]])
+            v_final=np.array([[talbot(M, t, pbar,r=r[0],f_const=f_const)*R_**2/cv_dot,r[l]/R_]])
         else:
             v_final= np.append(v_final,np.array([[talbot(M, t, pbar,r=r[l],f_const=f_const)*R_**2/cv_dot,r[l]/R_]]),axis=0)
     return v_final
@@ -283,7 +291,11 @@ def u_analitico(r, M, t):
         u_final.append([-talbot(M, t, rad_displacement, r=r[l], f_const=f_const), r[l]/R_])
     u_final = np.array(u_final)
     return u_final*R_**2/cv_dot
-
+def u_analiticoP(r, M, t):
+    print("u analico init")
+    f_const = talbot(M, t, f_coef)
+    u_final=-talbot(M, t, rad_displacement, r=r, f_const=f_const)
+    return u_final*R_**2/cv_dot
 
 t=delta
 X_w = Function(W)
@@ -294,18 +306,8 @@ f.set_figheight(10)
 L2=[]
 uplot=[]
 ig, ax = plt.subplots()
-plt.ylim((-10,0))
-plt.xlim((0,1))
-dtdot=(cv_dot/R_**2)*delta
-
-data_001 = []
-data_05 = []
-data_1 = []
-
-radio_001 = []
-radio_05 = []
-radio_1 = []
-
+plt.ylim((-5,0.2))
+plt.xlim((-0.01,1))
 for pot in range(steps):
 
 
@@ -328,50 +330,29 @@ for pot in range(steps):
     # post proceso 
     
 
-    if pot%(steps/50) ==0:
-        s = sigma(u_)
-        cauchy=project(s,TS)
+    # if pot%(steps/50) ==0:
+    #     s = sigma(u_)
+    #     cauchy=project(s,TS)
 
-        o1 = sigma_1(cauchy)
+    #     o1 = sigma_1(cauchy)
             
-        o2 = sigma_3(cauchy)
+    #     o2 = sigma_3(cauchy)
             
-        tm=-o2#(o1-o2)/2
-        fail = envFalla(o1, o2,theta,C)
-        fs = tm
-        fs=project(fs,Z)
-        flow=-K*grad(p_)
-        flow=project(flow,Z_v)
-        fs.rename("mean stress", "mean stress") ;vtkfile_fs << fs
-        u_.rename("displacement", "displacement") ;vtkfile_u << u_
-        flow.rename("flow", "flow") ;vtkfile_flow << flow
-        p_.rename("pressure", "pressure"); vtkfile_p << p_
+    #     tm=(o1-o2)/2
+    #     fail = envFalla(o1, o2,theta,C)
+    #     fs = tm
+    #     fs=project(fs,Z)
+    #     flow=-K*grad(p_)
+    #     flow=project(flow,Z_v)
+    #     fs.rename("mean stress", "mean stress") ;vtkfile_fs << fs
+    #     u_.rename("displacement", "displacement") ;vtkfile_u << u_
+    #     flow.rename("flow", "flow") ;vtkfile_flow << flow
+    #     p_.rename("pressure", "pressure"); vtkfile_p << p_
+    uplot.append([u_analiticoP(R_,M,t),-(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q_),tdot])
     z_=0
-    u_analiticos=u_analitico(r,M,tdot)
-    for i, row in enumerate(u_analiticos):  
-        if near(row[1], 0.01, dt / 2):  
-            print("YUJU")
-            radio_001.append([row[0], tdot])
-        elif near(row[1], 0.2, dt / 2):
-            print("uy")
-            radio_05.append([row[0], tdot])
-        elif near(row[1], 1, dt / 2):
-            print("caray")
-            radio_1.append([row[0], tdot])
-         
-    if near(t,0.01/(cv_dot/R_**2),dt/2):
-        print(tdot)
-        data_001.append(u_analiticos)
-    elif near(t,0.2/(cv_dot/R_**2),dt/2):
-        print(tdot)
-        data_05.append(u_analiticos)
-    elif near(t,0.99/(cv_dot/R_**2),dt/2):
-        print(tdot)
-        data_1.append(u_analiticos)
-
     if near(t,0.01/(cv_dot/R_**2),dt/2) or near(t,0.1/(cv_dot/R_**2),dt/2) or near(t,1/(cv_dot/R_**2),dt/2) :
         for y in range(snaps):
-            pdot=p_(z_*R_,5)/q_
+            pdot=(p_(z_*R_,H/2)/(q_))
             if y ==0:
                 results=np.array([[pdot,z_]])
             else:
@@ -387,10 +368,8 @@ for pot in range(steps):
         
         lines = plt.gca().get_lines()
         l1=lines[-1]
-        print("labelproblem")
-        labelLine(l1,-5,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
-        print("labelproblem")
-        if near(t,1/(cv_dot/R_**2),dt/2) :
+        labelLine(l1,-2,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
+        if near(t,0.01/(cv_dot/R_**2),dt/2) :
             ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
             
         #uplot.append([u_analitico(r,M,t),(1/B_m+mu/3)*u_(R_,0)[0]/(R_*q),tdot])
@@ -405,43 +384,51 @@ for pot in range(steps):
 
     t += delta
     
-plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+plt.savefig('RESULTADOS_ACUIFERO/presion_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
 plt.close()
-print(p_)
-
- 
-u_final=u_analitico(r,M,tdot)
-print(u_final)
-
-data_001 = np.concatenate(data_001)
-data_05 = np.concatenate(data_05)
-data_1 = np.concatenate(data_1)
-
-# Trazar la gráfica con las tres líneas
-plt.plot(data_001[:, 1], data_001[:, 0], label='t*=0.01')
-plt.plot(data_05[:, 1], data_05[:, 0], label='t*=0.2')
-plt.plot(data_1[:, 1], data_1[:, 0], label='t*=1')
-plt.xlabel("$r/R$")
-plt.ylabel("$u_z$")
-plt.legend()
-plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/desp_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+ig, ax = plt.subplots()
+uplot=np.array(uplot)
+line1, = ax.plot(uplot[:, 2], -uplot[:, 0], "--", color='black', label='Analítica')
+line2,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
+ax.set_xscale('log')
+plt.xlabel("$t*$ ",fontsize=20)
+plt.ylabel("$u*_{z}$",fontsize=20)
+plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
+plt.savefig('RESULTADOS_ACUIFERO/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
 plt.close()
-print(radio_001)
+# u_final=u_analitico(r,M,tdot)
+# print(u_final)
 
-x_values001 = [item[0] for item in radio_001]
-y_values001 = [item[1] for item in radio_001]
-x_values05 = [item[0] for item in radio_05]
-y_values05 = [item[1] for item in radio_05]
-x_values1 = [item[0] for item in radio_1]
-y_values1 = [item[1] for item in radio_1]
-# Trazar la gráfica con las tres líneas
-plt.plot(x_values001, y_values001, label='t*=0.01')
-plt.plot(x_values05, y_values05, label='t*=0.2')
-plt.plot(x_values1, y_values1, label='t*=1')
-plt.xlabel("$t*$")
-plt.ylabel("$u_z$")
-plt.legend()
-plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('Acuifero_confinado/RESULTADOS_ACUIFERO/desp(pvst)_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-plt.close()
+# data_001 = np.concatenate(data_001)
+# data_05 = np.concatenate(data_05)
+# data_1 = np.concatenate(data_1)
+
+# # Trazar la gráfica con las tres líneas
+# plt.plot(data_001[:, 1], data_001[:, 0], label='t*=0.01')
+# plt.plot(data_05[:, 1], data_05[:, 0], label='t*=0.2')
+# plt.plot(data_1[:, 1], data_1[:, 0], label='t*=1')
+# plt.xlabel("$r/R$")
+# plt.ylabel("$u_z$")
+# plt.legend()
+# plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
+# plt.savefig('RESULTADOS_ACUIFERO/desp_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+# plt.close()
+# print(radio_001)
+
+# x_values001 = [item[0] for item in radio_001]
+# y_values001 = [item[1] for item in radio_001]
+# x_values05 = [item[0] for item in radio_05]
+# y_values05 = [item[1] for item in radio_05]
+# x_values1 = [item[0] for item in radio_1]
+# y_values1 = [item[1] for item in radio_1]
+# # Trazar la gráfica con las tres líneas
+# plt.plot(x_values001, y_values001, label='t*=0.01')
+# plt.plot(x_values05, y_values05, label='t*=0.2')
+# plt.plot(x_values1, y_values1, label='t*=1')
+# plt.xlabel("$t*$")
+# plt.ylabel("$u_z$")
+# plt.legend()
+# plt.grid(True, color='k', which="both", alpha=0.3, linestyle='-', linewidth=0.5)
+# plt.savefig('RESULTADOS_ACUIFERO/desp(pvst)_aquifero_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+# plt.close()

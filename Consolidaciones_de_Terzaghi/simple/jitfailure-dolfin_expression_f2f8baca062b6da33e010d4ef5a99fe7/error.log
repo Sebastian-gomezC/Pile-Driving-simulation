@@ -1,0 +1,4 @@
+/tmp/tmp06rktc1b/dolfin_expression_f2f8baca062b6da33e010d4ef5a99fe7.cpp: In member function ‘virtual void dolfin::dolfin_expression_f2f8baca062b6da33e010d4ef5a99fe7::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
+/tmp/tmp06rktc1b/dolfin_expression_f2f8baca062b6da33e010d4ef5a99fe7.cpp:63:32: error: invalid type argument of unary ‘*’ (have ‘int’)
+           values[1] = -q/x[0]**2;
+                                ^
