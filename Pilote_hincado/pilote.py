@@ -34,7 +34,7 @@ def create_mesh(mesh, cell_type, prune_z=False):
         return out_mesh
 print('creando malla..')
 
-nombre = 'pilote_refinado_estructurado'
+nombre = 'pilote_refinado_estructurado_cartesiano'
 
 
    
@@ -78,7 +78,7 @@ cell_markers4 =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers4.set_all(False)
 class fine4(SubDomain):
         def inside(self, x, on_boundary):
-            return (x[0]<=0.2 and x[1]>=-1) 
+            return (x[0]<=0.2 and x[1]>=-9) 
 fine4().mark(cell_markers4, True)
 mesh = refine(mesh, cell_markers4)
 
@@ -194,7 +194,7 @@ TS = TensorFunctionSpace(mesh, "DG", 0)
 
 p, u = split(U)
 q, v = split(V)
-steps =18000
+steps =180
 n=FacetNormal(mesh)#vector normal 
 x = SpatialCoordinate(mesh)
 
@@ -209,7 +209,7 @@ Poro=0.3
 r=0.4
 nu=0.3#coeficiente de poisson  
 flo=Constant((0,0))
-E=K(subdominio,2072E3,1E6,2072E3)# #modulo elasticidad
+E=K(subdominio,19700E3,10E6,20720E3)# #modulo elasticidad
 mu = E/(2*(1+nu))#coeficientes de Lame
 lmbda = E*nu/((1+nu)*(1-2*nu))#coeficientes de Lame
 B_m=(E/(3*(1-2*nu)))**(-1)
@@ -218,7 +218,7 @@ alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =K(subdominio,18.94,20.61,23.27) #angulos friccion interna
 C=K(subdominio,15530,10350,18650) #cohesion
-k=K(subdominio,1E-8,1E-1,1E-8)
+k=K(subdominio,1E-8,5E-2,1E-8)
 
 # E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 mu = E/(2*(1+nu))#coeficientes de Lame
@@ -289,6 +289,10 @@ divu=    pconst[0]*(nabla_div(u)*x[0]    + u[0])
 divu_n=  pconst[1]*(nabla_div(u_n)*x[0]  + u_n[0])
 divu_nn= pconst[2]*(nabla_div(u_nn)*x[0] + u_nn[0])
 divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
+# divu=    pconst[0]*nabla_div(u)
+# divu_n=  pconst[1]*nabla_div(u_n)
+# divu_nn= pconst[2]*nabla_div(u_nn)
+# divu_nnn=pconst[3]*nabla_div(u_nnn)
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -299,17 +303,20 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
-T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
-#T=Constant((0,0))
-F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
-    -inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
-# F2 = dt*inner(nabla_grad(q),nabla_grad(k*p))*dx \
+# T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
+# F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*dx \
 #     + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
 #     -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(1,3),domain=mesh, subdomain_data=contorno)
 
 
-# F1 = inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + v[0]*(lmbda+2*mu)*u[0]/x[0]*dx - alpha*p*nabla_div(v)*x[0]*dx -alpha*p*v[0]*dx
-#     #-inner(T, v)*x[0]*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+# F1 = inner(sigma(u), epsilon(v))*dx - alpha*p*nabla_div(v)*dx\
+#    -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+
+
+T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
+F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + (lmbda+2*mu)*v[0]*u[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
+    -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+
 
 
 F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
@@ -322,56 +329,42 @@ X = Function(W)
 I=0
 v=0
 
-pile_disp = '''
-if (x[1] <-I) {
-  0;
-} else {
-    if (x[1] > -I && x[1]< -I+(2*r)) {
-        x[1]+I;
-    }else{
-        
-        };
-}'''
+L_momentum =lhs(F1)
+R_momentum =rhs(F1)
+L_mass=lhs(F2)
+R_mass=rhs(F2)
+L=L_momentum+L_mass
+R=R_momentum+R_mass
 for pot in range(steps):
+    if I<9:
+      if I<3:
+          v=(5/6)/60 
+      elif I>=3 and I<4:
+          v=(1/3)/60
+      elif I>=4 and I<5:
+          v=(0.76336)/60
+      elif I>=5 and I<8:
+          v=(1.77515)/60
+      else:
+          v=(0.41667)/60
+    else:
+      v=0
     I=(v)*(delta)+I
+        
+    T.I=I
+    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
+    residual = action(L, X)-R
+    v_reac = Function(W)
+    #apoyo izq:
+    bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
+
+    bc_Rx_i.apply(v_reac.vector())
+    print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
+    if I>0:
+        T.Rf=0.05*assemble(action(residual, v_reac))/I
+    bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
+    bcs=[bc1,bc2,bc3,bp1]
     
-    L_momentum =lhs(F1)
-    R_momentum =rhs(F1)
-    L_mass=lhs(F2)
-    R_mass=rhs(F2)
-    L=L_momentum+L_mass
-    R=R_momentum+R_mass
-    if I>=5 and I<8:
-        v=3.5/(2*60 +15)
-    else:
-        v=2.5/(5*60)
-    if I<8:
-        T.I=I
-        Dis=Expression(('x[1] <=-I? 0 : (x[1] > -I && x[1]<= -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? r : 0)','0'),I=I,r=r ,degree=2)
-        residual = action(L, X)-R
-        v_reac = Function(W)
-        #apoyo izq:
-        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I? 0 : (x[1] > -I && x[1]< -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
-
-        bc_Rx_i.apply(v_reac.vector())
-        print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
-        if I>0:
-            T.Rf=0.05*assemble(action(residual, v_reac))/I
-        bc3 = DirichletBC(W.sub(1), Dis,contorno,1)
-        bcs=[bc1,bc2,bc3,bp1]
-    else:
-        T.I=8
-        Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+(2*r)? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? r : 0)'),I=8,r=r ,degree=1)
-        residual = action(L, X)-R
-        v_reac = Function(W)
-        #apoyo izq:
-        bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+(2*r) ? 0.5*(x[1]+I): x[1]>=-I+(2*r) ? 1 : 0)'),I=8,r=r ,degree=1),contorno, 1)  
-
-        bc_Rx_i.apply(v_reac.vector())
-        print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
-        bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
-        T.Rf=0.05*assemble(action(residual, v_reac))/0.5
-        bcs=[bc1,bc2,bc3,bp1]
     print('assemble')
     A=assemble(L)
     b=assemble(R)
@@ -388,7 +381,7 @@ for pot in range(steps):
     p_n, u_n = split(X_n)
     u_=project(u_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 10== 0:
+    if pot % 1== 0:
         print('postproces')
         s = sigma(u_)
         
@@ -412,4 +405,4 @@ for pot in range(steps):
     print('p max:', p_.vector().get_local().max())
     print('p min:', p_.vector().get_local().min())
     
-    t=t+delta
+    t += delta
