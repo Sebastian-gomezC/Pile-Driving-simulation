@@ -23,6 +23,8 @@ import  sys
 import meshio
 import mshr
 from label_lines import *
+import pandas as pd 
+
 flag ="R"
 parameters['allow_extrapolation'] = True
 nombre = 'Terzaghi_multi'
@@ -63,10 +65,23 @@ bound().mark(contorno, 5)
 walls().mark(contorno, 1)
 
 # archivos de salida 
-vtkfile_u = File('%s.results3/u.pvd' % (nombre))
-vtkfile_fs = File('%s.results3/Mohr-Coulomb_Fs.pvd' % (nombre))
-vtkfile_p = File('%s.results3/Pressure.pvd' % (nombre))
-vtkfile_flow = File('%s.results3/flow.pvd' % (nombre))
+vtkfile_u = XDMFFile("%s.results/displacement.xdmf" % (nombre))
+vtkfile_fs = XDMFFile("%s.results/Mohr-Coulomb_Fs.xdmf" % (nombre))
+vtkfile_p = XDMFFile("%s.results/Pressure.xdmf" % (nombre))
+vtkfile_flow = XDMFFile("%s.results/flow.xdmf" % (nombre))
+vtkfile_bounds = XDMFFile("%s.results/bounds.xdmf" % (nombre))
+#material 
+
+vtkfile_u.parameters["flush_output"] = True
+vtkfile_fs.parameters["flush_output"] = True
+vtkfile_p.parameters["flush_output"] = True
+vtkfile_flow.parameters["flush_output"] = True
+vtkfile_bounds.parameters["flush_output"] = True
+vtkfile_u.parameters["rewrite_function_mesh"] = False
+vtkfile_fs.parameters["rewrite_function_mesh"] = False
+vtkfile_p.parameters["rewrite_function_mesh"] = False
+vtkfile_flow.parameters["rewrite_function_mesh"] = False
+vtkfile_bounds.parameters["rewrite_function_mesh"] = False
 
 
 def cildiv(v):
@@ -177,7 +192,7 @@ p_nnn, u_nnn = split(X_nnn)
 #pconst= [11/6,-3,3/2,-1/3] #bdf 3
 pconst=[1,-1,0,0] #bdf1
 types=['BDF1','BDF2','BDF2op','BDF3']
-scheme=types[0]
+scheme=types[3]
 du=pconst[0]*u
 du_n=pconst[1]*u_n
 du_nn=pconst[2]*u_nn
@@ -224,6 +239,7 @@ R=R_momentum+R_mass
 snaps=100
 
 p0= ((alpha*mv)/(alpha**2*mv+s_coef))*carga
+presure_df=pd.DataFrame()
 def p_analitico(time,snaps,cv,p0):
     z=0
     for n in range(snaps):
@@ -266,29 +282,56 @@ print('u final',u_f)
 ig, ax = plt.subplots()
 dtdot=(cv/1**2)*delta
 bcs=[bc1,bc2,bp1]
+u_dis=0.0
+outfile = File("%s.results/mesh.pvd" % (nombre))
+p_, u_ = split(X_n)
+u_=project(u_,Z_v)
+p_=project(p_,Z)
+u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)
+p_.rename("pressure", "pressure"); vtkfile_p.write(p_, t)
+outfile<<mesh
 for pot in range(steps):
-    
     #A=assemble(L)
     #b=assemble(R)
     #[bc.apply(A) for bc in bcs]
     #[bc.apply(b) for bc in bcs]
-    
     solve(L==R,X_w,bcs)
-    X_nnn.assign(X_nn)
-    p_nnn, u_nnn = split(X_nnn)
-    X_nn.assign(X_n)
-    p_nn, u_nn = split(X_nn)
-    X_n.assign(X_w)
-    p_n, u_n = split(X_n)
-    u_=project(u_n,Z_v)
-    p_=project(p_n,Z)
+    
+    p_, u_ = split(X_w)
+    u_=project(u_,Z_v)
+    p_=project(p_,Z)
+    if pot==0:
+       p_0= p_.vector().get_local().max()
 
     # post proceso 
     if pot==0:
         u_0dot = (mv-(alpha**2*mv**2)/(alpha**2*mv+s_coef))*carga
-        p_0=carga#p_(0.00,-0.1)
+    
+    
     tdot=(cv/H**2)*t
-    if pot%(steps/10) ==0:
+    # if pot%1 ==0:
+       
+    #uplot.append([(u_analitico(t, snaps, cv, p0)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
+    print(tdot)
+    # z_=0
+    # print(f'pmax ={p_(0,-0.09)} ')
+    # for k in range(snaps):
+        
+    #     pdot=p_(0.0,float(z_*((1+u_dis))))/p0
+    #     if k ==0:
+    #         results=np.array([[pdot,-z_]])
+    #     else:
+    #         results =np.append(results,np.array([[pdot,-z_]]),axis=0)
+    #     z_=z_- 1/snaps
+    
+    # L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
+    if near(t,0.01/(cv/H**2),dt/2) or near(t,0.1/(cv/H**2),dt/2) or near(t,0.5/(cv/H**2),dt/2)or near(t,1/(cv/H**2),dt/2):
+        p_=project(p_,Z)
+        p_=p_/p_0
+        p_=project(p_,Z)
+        p_a = p_analitico(t,snaps,cv,p0)
+        presure_df[f'p_analitico {tdot%5.3} step : {pot}'] = p_a[:,0]
+        outfile<<mesh
         s = sigma(u_)
         cauchy=project(s,TS)
 
@@ -302,39 +345,25 @@ for pot in range(steps):
         fs=project(fs,Z)
         flow=-K*grad(p_)
         flow=project(flow,Z_v)
-        fs.rename("mean stress", "mean stress") ;vtkfile_fs << fs
-        u_.rename("displacement", "displacement") ;vtkfile_u << u_
-        flow.rename("flow", "flow") ;vtkfile_flow << flow
-        p_.rename("pressure", "pressure"); vtkfile_p << p_
-    uplot.append([(u_analitico(t, snaps, cv, p0)+u_0dot)/(u_f-u_0dot),(u_(0,0)[1]+u_0dot)/(u_f-u_0dot),tdot])
-    print(tdot)
-    z_=0
-    for k in range(snaps):
-        pdot=p_(0.0,z_*1)/p0
-        if k ==0:
-            results=np.array([[pdot,-z_]])
-        else:
-            results =np.append(results,np.array([[pdot,-z_]]),axis=0)
-        z_=z_- 1/snaps
-    p_a = p_analitico(t,snaps,cv,p0)
-    L2.append([np.sum((results[:,0]-p_a[:,0])**2),tdot])
-    if near(t,0.01/(cv/H**2),dt/2) or near(t,0.1/(cv/H**2),dt/2) or near(t,0.5/(cv/H**2),dt/2)or near(t,1/(cv/H**2),dt/2):
+        fs.rename(" mean stress", "mean stress") ;vtkfile_fs.write(fs, tdot)
+        u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, tdot)
+        flow.rename("flow", "flow") ;vtkfile_flow.write(flow, tdot)
+        p_.rename("pressure", "pressure"); vtkfile_p.write(p_, tdot)
         
+        # line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='FEM',)
+        # plt.xlabel("$P*$ ",fontsize=20)
+        # plt.ylabel("$z*$",fontsize=20)
+        # line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='Analítica')
         
-        line1, =ax.plot(results[:, 0], results[:, 1], "-",color='red',label='FEM',)
-        plt.xlabel("$P*$ ",fontsize=20)
-        plt.ylabel("$z*$",fontsize=20)
-        line2,=ax.plot(p_a[:, 0], p_a[:, 1], "--",color='black',label='Analítica')
-        
-        lines = plt.gca().get_lines()
-        l1=lines[-1]
-        labelLine(l1,0.4,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
-        if near(t,0.01/(cv/1**2),dt/2) :
-            ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
+        # lines = plt.gca().get_lines()
+        # l1=lines[-1]
+        # labelLine(l1,0.4,label=r'$t*=${}'.format(round(tdot,2)),ha='left',va='bottom',align = True)
+        # if near(t,0.01/(cv/1**2),dt/2) :
+        #     ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper center')
             
-        plt.ylim((0,1.05))
-        plt.xlim((0,1.05))
-        print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
+        # plt.ylim((0,1.05))
+        # plt.xlim((0,1.05))
+        #print('error en la norma l2',np.sum((results[:,0]-p_a[:,0])**2 ))
         
         
         print('u max:',u_.vector().get_local().min(),'step', pot, 'of', steps,'time*:',tdot)
@@ -342,24 +371,40 @@ for pot in range(steps):
         print('p min:', p_.vector().get_local().min())
     if near(t,1/(cv/H**2),dt/2):
         break
+    disp_inside=X_w-X_n
+    disp_r = Function(W)
+    disp_r = project(disp_inside,W )
+    ALE.move(mesh,disp_r.sub(1))
+    #mesh.smooth(50)
+    X_nnn.assign(X_nn)
+    p_nnn, u_nnn = split(X_nnn)
+    X_nn.assign(X_n)
+    p_nn, u_nn = split(X_nn)
+    X_n.assign(X_w)
+    p_n, u_n = split(X_n)
     t += delta
-plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-plt.close()
-ig, ax = plt.subplots()
-uplot=np.array(uplot)
-line1,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
-line2, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
-ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
-ax.set_xscale('log')
-plt.xlabel("$t*$ ",fontsize=20)
-plt.ylabel("$u*_{z}$",fontsize=20)
-plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
-plt.savefig('resultados/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
-plt.close()
+    # 
+    
+p_a = p_analitico(t,snaps,cv,p0)
+presure_df[f'z'] = p_a[:,1]
+presure_df.to_csv('resultados/analitical pressure.csv')
+# plt.savefig('resultados/consolidacion_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+# plt.close()
+# ig, ax = plt.subplots()
+# uplot=np.array(uplot)
+# line1,=ax.plot(uplot[:,2],-uplot[:,1], "-",color='red',label='FEM')
+# line2, =ax.plot(uplot[:,2],-uplot[:,0],"--",color='black',label='Analítica')
+# ax.legend(handler_map={line1: HandlerLine2D(numpoints=4)},loc= 'upper left')
+# ax.set_xscale('log')
+# plt.xlabel("$t*$ ",fontsize=20)
+# plt.ylabel("$u*_{z}$",fontsize=20)
+# plt.grid(True,color='k',which="both",alpha=0.3, linestyle='-', linewidth=0.5)
+# plt.savefig('resultados/disp_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300,)
+# plt.close()
 
-L2=np.array(L2)
-plt.semilogy(L2[:,1],L2[:,0])
-plt.savefig('resultados/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
-np.savetxt('resultados/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (L2)) 
-plt.close()
+# L2=np.array(L2)
+# plt.semilogy(L2[:,1],L2[:,0])
+# plt.savefig('resultados/L2norm_dt%s_grosse_%s.png'%(round(dtdot,5),scheme),dpi=300)
+# np.savetxt('resultados/L2norm_dt%s_grosse_%s.out'%(round(dtdot,5),scheme), (L2)) 
+# plt.close()
 

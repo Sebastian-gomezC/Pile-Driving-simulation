@@ -21,7 +21,7 @@ import numpy as np
 from ufl.tensors import as_matrix
 import  sys
 import meshio
-import mshr
+from mshr import *
 
 parameters['allow_extrapolation'] = True
 
@@ -34,7 +34,7 @@ def create_mesh(mesh, cell_type, prune_z=False):
         return out_mesh
 print('creando malla..')
 
-nombre = 'pilote_refinado_estructurado_cartesiano'
+nombre = 'pilote_refinado_estructurado_axi'
 
 
    
@@ -42,9 +42,16 @@ nombre = 'pilote_refinado_estructurado_cartesiano'
 
 #%%
 
-mesh=RectangleMesh(Point(0.01, 0.0), Point(20,-30), 20, 30,"crossed")
+r=0.4
+domain =   Rectangle(dolfin.Point(0., 0.), dolfin.Point(20.,-30.)) \
+         - Polygon([Point(0, -2),Point(r, -2+r), Point(r, 0), Point(0, 0)])
+domain.set_subdomain(1, Rectangle(dolfin.Point(0, 0), dolfin.Point(20, -3)))
+domain.set_subdomain(2, Rectangle(dolfin.Point(0, -3), dolfin.Point(20, -8)))
+domain.set_subdomain(3, Rectangle(dolfin.Point(0, -8), dolfin.Point(20, -30)))
+mesh = generate_mesh(domain, 45)
 cell_markers =  MeshFunction("bool", mesh,mesh.topology().dim())
 cell_markers.set_all(False)
+
 class fine0(SubDomain):
         def inside(self, x, on_boundary):
             return  (x[1]>-13) and (x[0]<=3)
@@ -66,30 +73,30 @@ class fine2(SubDomain):
             return  (x[0]<=1 and x[1]>=-11) 
 fine2().mark(cell_markers2, True)
 mesh = refine(mesh, cell_markers2)
-cell_markers3 =  MeshFunction("bool", mesh,mesh.topology().dim())
-cell_markers3.set_all(False)
-class fine3(SubDomain):
-        def inside(self, x, on_boundary):
-            return (x[0]<=0.5 and x[1]>=-10) 
-fine3().mark(cell_markers3, True)
-mesh = refine(mesh, cell_markers3)
+# cell_markers3 =  MeshFunction("bool", mesh,mesh.topology().dim())
+# cell_markers3.set_all(False)
+# class fine3(SubDomain):
+#         def inside(self, x, on_boundary):
+#             return (x[0]<=0.5 and x[1]>=-10) 
+# fine3().mark(cell_markers3, True)
+# mesh = refine(mesh, cell_markers3)
 
-cell_markers4 =  MeshFunction("bool", mesh,mesh.topology().dim())
-cell_markers4.set_all(False)
-class fine4(SubDomain):
-        def inside(self, x, on_boundary):
-            return (x[0]<=0.2 and x[1]>=-9) 
-fine4().mark(cell_markers4, True)
-mesh = refine(mesh, cell_markers4)
+# cell_markers4 =  MeshFunction("bool", mesh,mesh.topology().dim())
+# cell_markers4.set_all(False)
+# class fine4(SubDomain):
+#         def inside(self, x, on_boundary):
+#             return (x[0]<=0.2 and x[1]>=-9) 
+# fine4().mark(cell_markers4, True)
+# mesh = refine(mesh, cell_markers4)
 
 contorno = MeshFunction("size_t", mesh, mesh.topology().dim()-1)
 tol=1E-6
 class disp(SubDomain):
         def inside(self, x, on_boundary):
-            return on_boundary and (abs(x[0]-0.01)< tol )#and (x[1]>-I)
+            return on_boundary and( (abs(x[0])< tol )or (x[0]<=r and x[1]>=-2.0))#and (x[1]>-I)
 class simetry(SubDomain):
         def inside(self,x,on_boundary):
-             return on_boundary and  abs(x[0]-0.01)< tol        
+             return on_boundary and  abs(x[0])< tol  or (x[0]<=r and x[1]>=-2.0)      
 
 class under(SubDomain):
         def inside(self, x, on_boundary):
@@ -107,7 +114,7 @@ level().mark(contorno, 2)
 disp().mark(contorno, 1)
 # simetry().mark(contorno,6)
 
-subdominio = MeshFunction("size_t", mesh, mesh.topology().dim())
+subdominio = MeshFunction("size_t", mesh, 2, mesh.domains())
 tol=1E-2
 class S1(SubDomain):
         def inside(self, x, on_boundary):
@@ -194,12 +201,13 @@ TS = TensorFunctionSpace(mesh, "DG", 0)
 
 p, u = split(U)
 q, v = split(V)
-steps =180
+
 n=FacetNormal(mesh)#vector normal 
 x = SpatialCoordinate(mesh)
 
 Ti=900#tiempo total
-delta= Ti/steps
+delta= 0.05
+steps = int(Ti/delta)
 dt=Constant((delta))
 t=0 # tiempo inicial
 # B_s=1E-11
@@ -218,7 +226,7 @@ alpha=(1-B_s/B_m) #biotcoef
 s_coef=(alpha-Poro)*B_s +Poro*B_f
 theta =K(subdominio,18.94,20.61,23.27) #angulos friccion interna
 C=K(subdominio,15530,10350,18650) #cohesion
-k=K(subdominio,1E-8,5E-2,1E-8)
+k=K(subdominio,1E-8,1E-7,1E-8)
 
 # E=B_m**(-1)*3*(1-2*nu)#modulo elasticidad 
 mu = E/(2*(1+nu))#coeficientes de Lame
@@ -314,7 +322,7 @@ ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 
 
 T=Expression(('0','x[1] <-I  ? 0 :  -Rf '),I=0,Rf=0,degree=2)
-F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + (lmbda+2*mu)*v[0]*u[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
+F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + (lmbda+2*mu)*v[0]*u[0]/x[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx\
     -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
 
 
@@ -326,9 +334,10 @@ F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
 
 
 X = Function(W)
-I=0
+I=2
+I_old = 2
 v=0
-
+outfile = File("%s.results/mesh.pvd" % (nombre))
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
@@ -336,6 +345,10 @@ R_mass=rhs(F2)
 L=L_momentum+L_mass
 R=R_momentum+R_mass
 for pot in range(steps):
+    # outfile<< mesh
+    t += delta
+    
+    
     if I<9:
       if I<3:
           v=(5/6)/60 
@@ -349,19 +362,27 @@ for pot in range(steps):
           v=(0.41667)/60
     else:
       v=0
+    
     I=(v)*(delta)+I
         
     T.I=I
-    Dis=Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< -I+r ? x[1]+I: x[1]>=-I+r ? r : 0)'),I=I,r=r ,degree=1)
+    
+    
+    #(x[1]> -2) ? ((x[1]<= -I-r) ? ((x[1] >= -I and x[1]< -I+r ) ? x[1]+I -x[0]:   ) : ) : 
+
+    Dis_n = Expression(('1'),I=I,I_=I_old,r=r ,degree=1)
+    Dis = Expression(('(x[1] < -I  ? 0 : ((x[1] >= -I and x[1]< -I+r )? x[1]+I  : (x[1]>=-I+r ? r : r))) - (x[1] < -I_  ? 0 : ((x[1] >= -I_ and x[1]< -I_+r )? x[1]+I_  : (x[1]>=-I_+r ? r : r)))'),I_=2,I=I,r=r ,degree=1)
+    Dis_mesh = Expression(('(x[1] <= -I  ? 0 : ((x[1] > -I and x[1]< -I+r )? I-I_  : (x[1]>=-I+r ? 0 : 0)))'),I_=I_old,I=I,r=r ,degree=1)
     residual = action(L, X)-R
     v_reac = Function(W)
     #apoyo izq:
-    bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]< 1 ? x[1]+I: x[1]>=1 ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
+    bc_Rx_i = DirichletBC(W.sub(1).sub(0),Expression(('x[1] <-I  ? 0 : (x[1] > -I && x[1]<= -I+r ? 1: x[1]>=-I+r ? 1 : 0)'),I=I,r=r ,degree=1),contorno, 1)  
 
     bc_Rx_i.apply(v_reac.vector())
-    print("Horizontal reaction Rx left support = {}".format(assemble(action(residual, v_reac))))
+    F_x=assemble(action(residual, v_reac))
+    print("Horizontal reaction Rx left support = {}".format(F_x))
     if I>0:
-        T.Rf=0.05*assemble(action(residual, v_reac))/I
+        T.Rf=0.05*F_x/I
     bc3 = DirichletBC(W.sub(1).sub(0), Dis,contorno,1)
     bcs=[bc1,bc2,bc3,bp1]
     
@@ -372,17 +393,12 @@ for pot in range(steps):
     [bc.apply(b) for bc in bcs]
     print('solver')
     solve(A, X.vector(), b)
-    print('solver end')
-    X_nnn.assign(X_nn)
-    p_nnn, u_nnn = split(X_nnn)
-    X_nn.assign(X_n)
-    p_nn, u_nn = split(X_nn)
-    X_n.assign(X)
-    p_n, u_n = split(X_n)
-    u_=project(u_n,Z_v)
-    p_=project(p_n,Z)
-    if pot % 1== 0:
+    if pot % 10== 0:
+        p_, u_ = split(X)
         print('postproces')
+        p_, u_ = split(X)
+        u_=project(u_,Z_v)
+        p_=project(p_,Z)
         s = sigma(u_)
         
         cauchy=project(s,TS)
@@ -393,7 +409,7 @@ for pot in range(steps):
         
         tm=(o1-o2)/2
         fail = envFalla(o1, o2,theta,C)
-        fs = tm
+        fs = fail/tm
         fs=project(fs,Z)
         flow=-k*grad(p_)
         flow=project(flow,Z_v)
@@ -401,8 +417,23 @@ for pot in range(steps):
         u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)
         flow.rename("flow", "flow") ;vtkfile_flow.write(flow, t)
         p_.rename("pressure", "pressure"); vtkfile_p.write(p_, t)
-    print('u max:',u_.vector().get_local().max(),'step', pot, 'of', steps,'time:',t,'deep',I)
-    print('p max:', p_.vector().get_local().max())
-    print('p min:', p_.vector().get_local().min())
+        print('u max:',u_.vector().get_local().max(),'step', pot, 'of', steps,'time:',t,'deep',I)
+        print('p max:', p_.vector().get_local().max())
+        print('p min:', p_.vector().get_local().min())
+    disp_inside=X-X_n
+    disp_r = Function(W)
+    disp_r = project(disp_inside,W )
+    disp_bc = DirichletBC(W.sub(1).sub(0),  Dis_mesh, contorno,1)
     
-    t += delta
+    # disp_bc.apply(disp_r.vector())
+    # ALE.move(mesh,disp_r.sub(1))
+    # mesh.smooth(50)
+    print('solver end')
+    X_nnn.assign(X_nn)
+    p_nnn, u_nnn = split(X_nnn)
+    X_nn.assign(X_n)
+    p_nn, u_nn = split(X_nn)
+    X_n.assign(X)
+    p_n, u_n = split(X_n)
+    I_old=I
+    

@@ -177,9 +177,8 @@ def epsilon(u):
 def sigma(u):
     return lmbda*tr(epsilon(u))*Identity(d) + 2*mu*epsilon(u)
 ele_p  = FiniteElement("P",mesh.ufl_cell(), 1) # pressure
-ele_Q  = VectorElement("P",mesh.ufl_cell(), 1) # pressure
 ele_u  = VectorElement("P",mesh.ufl_cell(), 1) # solid displacement
-W = MixedElement([ele_p, ele_u,ele_Q])
+W = MixedElement([ele_p, ele_u])
 W = FunctionSpace(mesh, W)
 U = TrialFunction(W)
 V = TestFunction(W)
@@ -187,9 +186,9 @@ Z= FunctionSpace(mesh, 'P', 1)
 Z_v = VectorFunctionSpace(mesh, 'P', 1)
 TS = TensorFunctionSpace(mesh, "DG", 0)
 
-p, u,Q = split(U)
-q, v,h = split(V)
-steps =180
+p, u = split(U)
+q, v = split(V)
+steps =18000
 n=FacetNormal(mesh)#vector normal 
 x = SpatialCoordinate(mesh)
 
@@ -246,29 +245,22 @@ def sigma_3(T):
     b =-tr(T)
     return -b/2 - sqrt(b**2-4*c)/2
 
-
-vtkfile_sudint= File('%s.results/subd.pvd' % (nombre))
-vtkfile_sudint<< contorno
-
-
 bp1=DirichletBC(W.sub(0),Constant((0)),contorno,2)
-bq1=DirichletBC(W.sub(2).sub(0),Constant((0)),contorno,1)
-bq2=DirichletBC(W.sub(2).sub(1),Constant((0)),contorno,3)
 bc1 = DirichletBC(W.sub(1), Constant((0.0,0.0)),contorno,2)
 bc2 = DirichletBC(W.sub(1).sub(1), Constant((0.0)),contorno,3)
 
 
-x_n=Expression(('0','0','0','0','0'), gam=gam,degree=5)
+x_n=Expression(('0','0','0'), gam=gam,degree=5)
 X_n = Function(W)
 X_n=interpolate(x_n, W)
-p_n, u_n,Q_n = split(X_n)
+p_n, u_n = split(X_n)
 
 X_nn=Function(W)
 X_nn=interpolate(x_n, W)
-p_nn, u_nn,Q_nn = split(X_nn)
+p_nn, u_nn = split(X_nn)
 X_nnn=Function(W)
 X_nnn=interpolate(x_n, W)
-p_nnn, u_nnn,Q_nnn = split(X_nnn)
+p_nnn, u_nnn = split(X_nnn)
 #
 #pconst=[3./2,-2,1./2,0.0] #bdf2
 #pconst = [0.48*11/6+0.52*3/2,0.48*-3+0.52*-2,0.48*3/2+0.52*1/2,0.48*-1/3] #bdf2 op
@@ -280,14 +272,10 @@ du_nn=pconst[2]*u_nn
 du_nnn=pconst[3]*u_nnn
 du_t= du+du_n +du_nn +du_nnn
 
-# divu=    pconst[0]*(nabla_div(u)*x[0]    + u[0])
-# divu_n=  pconst[1]*(nabla_div(u_n)*x[0]  + u_n[0])
-# divu_nn= pconst[2]*(nabla_div(u_nn)*x[0] + u_nn[0])
-# divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
-divu=    pconst[0]*nabla_div(u)
-divu_n=  pconst[1]*nabla_div(u_n)
-divu_nn= pconst[2]*nabla_div(u_nn)
-divu_nnn=pconst[3]*nabla_div(u_nnn)
+divu=    pconst[0]*(nabla_div(u)*x[0]    + u[0])
+divu_n=  pconst[1]*(nabla_div(u_n)*x[0]  + u_n[0])
+divu_nn= pconst[2]*(nabla_div(u_nn)*x[0] + u_nn[0])
+divu_nnn=pconst[3]*(nabla_div(u_nnn)*x[0]+ u_nnn[0])
 divu_t= divu+divu_n +divu_nn+divu_nnn
 
 dp=pconst[0]*p
@@ -298,43 +286,36 @@ dp_t=dp+dp_n+dp_nn+dp_nnn
 
 ds = Measure('ds', domain=mesh, subdomain_data=contorno)
 #
+
+
 T=Constant((0,0))
-F2 = dt*inner(nabla_grad(q),nabla_grad(p))*dx \
-    + alpha*divu_t*q*dx + (s_coef)*(dp_t)*q*dx \
-    -dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(3,1),domain=mesh, subdomain_data=contorno)
+F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + (lmbda+2*mu)*v[0]*u[0]/x[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx-alpha*p*v[0]*dx\
+    -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
 
 
-F1 = inner(sigma(u), epsilon(v))*dx - alpha*p*nabla_div(v)*dx\
-   -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
+
+F2 = dt*k*inner(nabla_grad(q),nabla_grad(p))*x[0]*dx\
++ alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
+-dt*(inner(Constant((0,0)),n))*q*ds(subdomain_id=(3,1),domain=mesh, subdomain_data=contorno)
 
 
-# T=Constant((0,0))
-# F1 =  inner(sigma(u), epsilon(v))*x[0]*dx +v[0]*lmbda*nabla_div(u)*dx + (lmbda+2*mu)*v[0]*u[0]/x[0]*dx  -alpha*p*nabla_div(v)*x[0]*dx-alpha*p*v[0]*dx\
-#     -inner(T, v)*ds(subdomain_id=1, domain=mesh, subdomain_data=contorno)
-
-F3=k*inner(nabla_grad(p),h)*dx+ inner(Q,h)*dx
 
 
-# F2 = dt*k*inner(nabla_grad(q),Q)*x[0]*dx\
-# + alpha*divu_t*q*dx +Constant((s_coef))*(dp_t)*q*x[0]*dx\
-
-
+outfile = File("%s.results/mesh.pvd" % (nombre))
+outfile << mesh
 
 X = Function(W)
 L_momentum =lhs(F1)
 R_momentum =rhs(F1)
 L_mass=lhs(F2)
 R_mass=rhs(F2)
-L_darcy=lhs(F3)
-R_darcy=rhs(F3)
-L=L_momentum+L_mass+L_darcy
-R=R_momentum+R_mass+R_darcy
-
+L=L_momentum+L_mass
+R=R_momentum+R_mass
 for pot in range(steps):
     
     disp = Expression(('t/10000'),t=t,degree=1)
     bc3 = DirichletBC(W.sub(1).sub(0), disp,contorno,1)
-    bcs=[bc1,bc2,bc3,bp1,bq1,bq1]
+    bcs=[bc1,bc2,bc3,bp1]
     A=assemble(L)
     b=assemble(R)
     [bc.apply(A) for bc in bcs]
@@ -343,15 +324,21 @@ for pot in range(steps):
     solve(A, X.vector(), b)
     print('solver end')
     X_nnn.assign(X_nn)
-    p_nnn, u_nnn,Q_nnn = split(X_nnn)
+    p_nnn, u_nnn = split(X_nnn)
     X_nn.assign(X_n)
-    p_nn, u_nn,Q_nn = split(X_nn)
+    p_nn, u_nn = split(X_nn)
+    disp_r=X-X_n
+    disp_r_real = Function(W)
+    disp_r=project(disp_r, W)
+    ALE.move(mesh,disp_r.sub(1))
     X_n.assign(X)
-    p_n, u_n,Q_n = split(X_n)
+    p_n, u_n = split(X_n)
+    
     u_=project(u_n,Z_v)
-    Q_=project(Q_n,Z_v)
     p_=project(p_n,Z)
-    if pot % 1== 0:
+    for i in range(100):
+        mesh.smooth()
+    if pot % 100== 0:
         print('postproces')
         s = sigma(u_)
         
@@ -365,14 +352,17 @@ for pot in range(steps):
         fail = envFalla(o1, o2,theta,C)
         fs = tm
         fs=project(fs,Z)
-        flow=-k*Q_
+        flow=-k*grad(p_)
         flow=project(flow,Z_v)
-        fs.rename(" mean stress", "mean stress") ;vtkfile_fs.write(fs, t)
-        u_.rename("displacement", "displacement") ;vtkfile_u.write(u_, t)
-        flow.rename("flow", "flow") ;vtkfile_flow.write(flow, t)
-        p_.rename("pressure", "pressure"); vtkfile_p.write(p_, t)
+        fs.rename(" mean stress", "mean stress") ;vtkfile_fs.write(fs,t)
+        u_.rename("displacement", "displacement") ;vtkfile_u.write(u_,t)
+        flow.rename("flow", "flow") ;vtkfile_flow.write(flow)
+        p_.rename("pressure", "pressure"); vtkfile_p.write(p_)
+    
+        outfile << mesh  
     print('u max:',u_.vector().get_local().max(),'step', pot, 'of', steps,'time:',t)
     print('p max:', p_.vector().get_local().max())
     print('p min:', p_.vector().get_local().min())
     
+    t=t+delta
     t=t+delta
