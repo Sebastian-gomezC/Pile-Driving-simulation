@@ -1,8 +1,0 @@
-/tmp/tmp9420zjsw/dolfin_expression_96da154ebc0bfa391429df22feff5da0.cpp: In member function ‘virtual void dolfin::dolfin_expression_96da154ebc0bfa391429df22feff5da0::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
-/tmp/tmp9420zjsw/dolfin_expression_96da154ebc0bfa391429df22feff5da0.cpp:63:36: error: ‘Pi’ was not declared in this scope
-           values[1] = -q*x[0]*x[0]*Pi;
-                                    ^~
-/tmp/tmp9420zjsw/dolfin_expression_96da154ebc0bfa391429df22feff5da0.cpp:63:36: note: suggested alternative: ‘pi’
-           values[1] = -q*x[0]*x[0]*Pi;
-                                    ^~
-                                    pi

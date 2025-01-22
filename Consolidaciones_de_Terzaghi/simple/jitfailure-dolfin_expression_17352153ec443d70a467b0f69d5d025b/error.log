@@ -1,4 +1,0 @@
-/tmp/tmpla9glqu1/dolfin_expression_17352153ec443d70a467b0f69d5d025b.cpp: In member function ‘virtual void dolfin::dolfin_expression_17352153ec443d70a467b0f69d5d025b::eval(Eigen::Ref<Eigen::Matrix<double, -1, 1> >, Eigen::Ref<const Eigen::Matrix<double, -1, 1> >) const’:
-/tmp/tmpla9glqu1/dolfin_expression_17352153ec443d70a467b0f69d5d025b.cpp:62:24: error: ‘carga’ was not declared in this scope
-           values[1] = -carga/x[0];
-                        ^~~~~

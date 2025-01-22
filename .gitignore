@@ -9,3 +9,7 @@
 *.ai
 *.out
 *.zip
+*.msh
+resultados*
+*.pyc
+*checkpoint.py
